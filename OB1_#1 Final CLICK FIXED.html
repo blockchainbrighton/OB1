@@ -20,6 +20,18 @@ Your browser does not support the audio element.
     const gainNode = audioContext.createGain();
     gainNode.connect(audioContext.destination);
 
+    // Function to update BPM and recalculate beat duration
+    function updateBPM(newBPM) {
+        bpm = newBPM;
+        beatDurationSeconds = 60 / bpm;
+        console.log(`Updated BPM to ${bpm}, beatDurationSeconds to ${beatDurationSeconds}`);
+        // Optionally, restart the playback with the new BPM if it's currently playing
+        if (isLooping) {
+            stopAudioPlayback();
+            playAudioBuffer();
+        }
+    }
+
     async function fetchAndDecodeAudio(elementId) {
         const audioElement = document.getElementById(elementId);
         const sourceElement = audioElement.querySelector('source');
@@ -84,7 +96,24 @@ Your browser does not support the audio element.
             playAudioBuffer();
         }
     });
+
+    document.addEventListener('bpmChange', (event) => {
+        const adjustment = event.detail.adjustment;
+        // Assuming bpm is your global BPM variable
+        bpm += adjustment;
+        console.log(`BPM adjusted to ${bpm}. Recalculating beat duration...`);
+        // Recalculate beatDurationSeconds and adjust scheduling as needed
+    });
+
+    document.addEventListener('multiplierChange', (event) => {
+        const multiplier = event.detail.multiplier;
+        // Assuming scheduleMultiplier is your global scheduling multiplier variable
+        scheduleMultiplier *= multiplier;
+        console.log(`Scheduling multiplier adjusted to ${scheduleMultiplier}. Adjusting playback scheduling...`);
+        // Adjust playback scheduling as needed
+    });
+
 </script>
-<script scr="OB1_CommsAndHotkeys.js"></script>
+<script scr="OB1_ActiveTab_Hotkeys.js"></script>
 </body>
 </html>
