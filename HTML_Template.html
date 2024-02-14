@@ -17,17 +17,22 @@ Your browser does not support the audio element.
     let attackFadeDuration = 0.01; // Initial attack fade duration in seconds, adjustable
     let tailFadeDuration = 0.001; // Initial tail fade duration in seconds, adjustable
 
+    let scheduledNotes = []; // Array to keep track of scheduled notes
+
+
     const gainNode = audioContext.createGain();
     gainNode.connect(audioContext.destination);
 
     // Function to update BPM and recalculate beat duration
     // Modified updateBPM function to restart playback with new BPM
     function updateBPM(newBPM) {
+        console.log(`[updateBPM] Called at ${new Date().toISOString()} with newBPM: ${newBPM}`);
         bpm = newBPM;
         beatDurationSeconds = 60 / bpm;
-        console.log(`Updated BPM to ${bpm}, beatDurationSeconds to ${beatDurationSeconds}`);
+        console.log(`[updateBPM] BPM updated to ${bpm}, recalculated beatDurationSeconds to ${beatDurationSeconds}`);
         restartPlaybackIfNeeded();
     }
+
 
     // New function to restart playback if it's currently running
     function restartPlaybackIfNeeded() {
@@ -52,47 +57,65 @@ Your browser does not support the audio element.
     }
 
     function scheduleNextNote() {
-        if (!isLooping || !audioBuffer) return;
+        console.log(`[scheduleNextNote] Called at ${new Date().toISOString()}`);
+        if (!isLooping || !audioBuffer) {
+            console.log("[scheduleNextNote] Exiting: isLooping or audioBuffer not ready.");
+            return;
+        }
+        console.log(`Scheduling next note with BPM: ${bpm}, beatDurationSeconds: ${beatDurationSeconds}, nextNoteTime: ${nextNoteTime}`);
+
+        // Clear any future notes that haven't started yet
+        scheduledNotes.forEach(note => note.source.stop(audioContext.currentTime));
+        scheduledNotes = [];
 
         const source = audioContext.createBufferSource();
         source.buffer = audioBuffer;
         source.connect(gainNode);
 
+        scheduledNotes.push({source, startTime: nextNoteTime}); // Keep track of this note
+
         gainNode.gain.cancelScheduledValues(nextNoteTime);
-        // Apply attack fade
         gainNode.gain.setValueAtTime(0.001, nextNoteTime);
         gainNode.gain.linearRampToValueAtTime(1, nextNoteTime + attackFadeDuration);
 
-        // Schedule the note to start at nextNoteTime
         source.start(nextNoteTime);
 
-        // Apply tail fade if the sample is longer than the beat duration
         if (audioBuffer.duration > beatDurationSeconds) {
             const crossFadeStartTime = nextNoteTime + beatDurationSeconds - tailFadeDuration;
             gainNode.gain.linearRampToValueAtTime(0.001, crossFadeStartTime);
         }
 
-        nextNoteTime += beatDurationSeconds; // Schedule the next note
+        nextNoteTime += beatDurationSeconds;
 
         const delayUntilNextNote = Math.max(nextNoteTime - audioContext.currentTime, 0) * 1000;
         setTimeout(scheduleNextNote, delayUntilNextNote);
+        console.log(`[scheduleNextNote] Note scheduled at ${nextNoteTime}, with delayUntilNextNote: ${delayUntilNextNote}ms`);
     }
 
     // Adjustments to the playAudioBuffer and stopAudioPlayback functions as needed
     function playAudioBuffer() {
+        console.log(`[playAudioBuffer] Called at ${new Date().toISOString()}`);
         if (!isLooping) {
             isLooping = true;
-            nextNoteTime = audioContext.currentTime; // Reset nextNoteTime to now
-            scheduleNextNote(); // Begin scheduling with the new BPM
+            nextNoteTime = audioContext.currentTime;
+            console.log(`[playAudioBuffer] Starting playback. nextNoteTime set to ${nextNoteTime}`);
+            scheduleNextNote();
+        } else {
+            console.log("[playAudioBuffer] Playback is already looping.");
         }
     }
 
     function stopAudioPlayback() {
-        isLooping = false;
-        // You may need additional logic here to stop the current playback immediately
-        // For example, stopping the currently playing BufferSource nodes.
+        console.log(`[stopAudioPlayback] Called at ${new Date().toISOString()}`);
+        if (isLooping) {
+            isLooping = false;
+            // Additional logic to stop currently playing BufferSource nodes
+            console.log("[stopAudioPlayback] Stopping playback and clearing scheduled notes.");
+            // Assuming scheduledNotes.forEach is called here
+        } else {
+            console.log("[stopAudioPlayback] Playback is already stopped.");
+        }
     }
-
 
     document.getElementById("OB1_Image").addEventListener("click", async () => {
         console.log("Click detected...");

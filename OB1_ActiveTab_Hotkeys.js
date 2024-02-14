@@ -39,13 +39,13 @@ document.addEventListener('keydown', (event) => {
     }
 
     // Double the scheduling of playback (Control + "=" or Control + "+")
-    if ((event.key === '=' || event.key === '+') && !event.shiftKey && event.ctrlKey) {
+    if ((event.key === '_' || event.key === '-') && !event.shiftKey && event.ctrlKey) {
         multiplierEvent.detail.multiplier = 2;
         document.dispatchEvent(multiplierEvent);
     }
 
     // Halve the scheduling of playback (Control + "-" or Control + "_")
-    if ((event.key === '-' || event.key === '_') && !event.shiftKey && event.ctrlKey) {
+    if ((event.key === '+' || event.key === '=') && !event.shiftKey && event.ctrlKey) {
         multiplierEvent.detail.multiplier = 0.5;
         document.dispatchEvent(multiplierEvent);
     }
