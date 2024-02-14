@@ -1,15 +1,15 @@
 <!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>OB1 #1 - Audional Art</title><style>body{background-color:#000000;display:flex;justify-content:center;align-items:center;height:100vh;margin:0}img {width: auto;height: auto;max-width: 60%;max-height: 80vh;object-fit: contain;aspect-ratio: 1 / 1;}
 </style></head><body>
-<img id="OB1_Image" src="data:image/jpeg;base64,/9j/4AAQSkZJRgABAQ...
+<img id="OB1_Image" src="data:image/jpeg;base64,/9j/4AAQSkZJRgABAQEAYABgAAD... shortened for brevity">
 <audio id="audionalData" loop data-audionalSampleName="808 Kick Drum">
-<source src="data:audio/wav;base64,UklGRk6GAQBXQVZFS...
+<source src="data:audio/wav;base64,UklGRk6GAQB... shortened for brevity">
 Your browser does not support the audio element.
 </audio>
 <script>
     const audioContext = new (window.AudioContext || window.webkitAudioContext)();
 
-    const bpm = 78;
-    const beatDurationSeconds = 60 / bpm;
+    let bpm = 78;
+    let beatDurationSeconds = 60 / bpm;
 
     let isLooping = false;
     let audioBuffer = null;
@@ -19,6 +19,23 @@ Your browser does not support the audio element.
 
     const gainNode = audioContext.createGain();
     gainNode.connect(audioContext.destination);
+
+    // Function to update BPM and recalculate beat duration
+    // Modified updateBPM function to restart playback with new BPM
+    function updateBPM(newBPM) {
+        bpm = newBPM;
+        beatDurationSeconds = 60 / bpm;
+        console.log(`Updated BPM to ${bpm}, beatDurationSeconds to ${beatDurationSeconds}`);
+        restartPlaybackIfNeeded();
+    }
+
+    // New function to restart playback if it's currently running
+    function restartPlaybackIfNeeded() {
+        if (isLooping) {
+            stopAudioPlayback();
+            playAudioBuffer();
+        }
+    }
 
     async function fetchAndDecodeAudio(elementId) {
         const audioElement = document.getElementById(elementId);
@@ -61,17 +78,21 @@ Your browser does not support the audio element.
         setTimeout(scheduleNextNote, delayUntilNextNote);
     }
 
+    // Adjustments to the playAudioBuffer and stopAudioPlayback functions as needed
     function playAudioBuffer() {
         if (!isLooping) {
             isLooping = true;
-            nextNoteTime = audioContext.currentTime; // Reset nextNoteTime to current time
-            scheduleNextNote(); // Start scheduling notes
+            nextNoteTime = audioContext.currentTime; // Reset nextNoteTime to now
+            scheduleNextNote(); // Begin scheduling with the new BPM
         }
     }
 
     function stopAudioPlayback() {
         isLooping = false;
+        // You may need additional logic here to stop the current playback immediately
+        // For example, stopping the currently playing BufferSource nodes.
     }
+
 
     document.getElementById("OB1_Image").addEventListener("click", async () => {
         console.log("Click detected...");
@@ -84,7 +105,24 @@ Your browser does not support the audio element.
             playAudioBuffer();
         }
     });
+
+    document.addEventListener('bpmChange', (event) => {
+        const adjustment = event.detail.adjustment;
+        // Assuming bpm is your global BPM variable
+        bpm += adjustment;
+        console.log(`BPM adjusted to ${bpm}. Recalculating beat duration...`);
+        // Recalculate beatDurationSeconds and adjust scheduling as needed
+    });
+
+    document.addEventListener('multiplierChange', (event) => {
+        const multiplier = event.detail.multiplier;
+        // Assuming scheduleMultiplier is your global scheduling multiplier variable
+        scheduleMultiplier *= multiplier;
+        console.log(`Scheduling multiplier adjusted to ${scheduleMultiplier}. Adjusting playback scheduling...`);
+        // Adjust playback scheduling as needed
+    });
+
 </script>
-<script src="OB1_CommsAndHotkeys.js"></script>
+<script src="OB1_ActiveTab_Hotkeys.js"></script>
 </body>
 </html>
