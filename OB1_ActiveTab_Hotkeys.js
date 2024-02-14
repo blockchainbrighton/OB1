@@ -13,24 +13,28 @@ document.addEventListener('keydown', (event) => {
     // Increase BPM by 1
     if (event.key === '=' && !event.shiftKey && !event.ctrlKey) {
         bpmEvent.detail.adjustment = 1;
+        console.log(`Dispatching bpmChange event, adjustment: ${bpmEvent.detail.adjustment}`);
         document.dispatchEvent(bpmEvent);
     }
 
     // Decrease BPM by 1
     if (event.key === '-' && !event.shiftKey && !event.ctrlKey) {
         bpmEvent.detail.adjustment = -1;
+        console.log(`Dispatching bpmChange event, adjustment: ${bpmEvent.detail.adjustment}`);
         document.dispatchEvent(bpmEvent);
     }
 
     // Increase BPM by 10 (Shift + "=" or Shift + "+")
     if ((event.key === '=' || event.key === '+') && event.shiftKey && !event.ctrlKey) {
         bpmEvent.detail.adjustment = 10;
+        console.log(`Dispatching bpmChange event, adjustment: ${bpmEvent.detail.adjustment}`);
         document.dispatchEvent(bpmEvent);
     }
 
     // Decrease BPM by 10 (Shift + "-" or Shift + "_")
     if ((event.key === '-' || event.key === '_') && event.shiftKey && !event.ctrlKey) {
         bpmEvent.detail.adjustment = -10;
+        console.log(`Dispatching bpmChange event, adjustment: ${bpmEvent.detail.adjustment}`);
         document.dispatchEvent(bpmEvent);
     }
 

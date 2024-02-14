@@ -8,8 +8,8 @@ Your browser does not support the audio element.
 <script>
     const audioContext = new (window.AudioContext || window.webkitAudioContext)();
 
-    const bpm = 78;
-    const beatDurationSeconds = 60 / bpm;
+    let bpm = 78;
+    let beatDurationSeconds = 60 / bpm;
 
     let isLooping = false;
     let audioBuffer = null;
@@ -21,11 +21,16 @@ Your browser does not support the audio element.
     gainNode.connect(audioContext.destination);
 
     // Function to update BPM and recalculate beat duration
+    // Modified updateBPM function to restart playback with new BPM
     function updateBPM(newBPM) {
         bpm = newBPM;
         beatDurationSeconds = 60 / bpm;
         console.log(`Updated BPM to ${bpm}, beatDurationSeconds to ${beatDurationSeconds}`);
-        // Optionally, restart the playback with the new BPM if it's currently playing
+        restartPlaybackIfNeeded();
+    }
+
+    // New function to restart playback if it's currently running
+    function restartPlaybackIfNeeded() {
         if (isLooping) {
             stopAudioPlayback();
             playAudioBuffer();
@@ -73,17 +78,21 @@ Your browser does not support the audio element.
         setTimeout(scheduleNextNote, delayUntilNextNote);
     }
 
+    // Adjustments to the playAudioBuffer and stopAudioPlayback functions as needed
     function playAudioBuffer() {
         if (!isLooping) {
             isLooping = true;
-            nextNoteTime = audioContext.currentTime; // Reset nextNoteTime to current time
-            scheduleNextNote(); // Start scheduling notes
+            nextNoteTime = audioContext.currentTime; // Reset nextNoteTime to now
+            scheduleNextNote(); // Begin scheduling with the new BPM
         }
     }
 
     function stopAudioPlayback() {
         isLooping = false;
+        // You may need additional logic here to stop the current playback immediately
+        // For example, stopping the currently playing BufferSource nodes.
     }
+
 
     document.getElementById("OB1_Image").addEventListener("click", async () => {
         console.log("Click detected...");
@@ -114,6 +123,6 @@ Your browser does not support the audio element.
     });
 
 </script>
-<script scr="OB1_ActiveTab_Hotkeys.js"></script>
+<script src="OB1_ActiveTab_Hotkeys.js"></script>
 </body>
 </html>
