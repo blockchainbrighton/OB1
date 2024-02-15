@@ -26,11 +26,9 @@ Your browser does not support the audio element.
 
 </style>
 <script>
-   // Ensure this setup occurs before any interaction or usage
     const audioContext = new (window.AudioContext || window.webkitAudioContext)();
-    const masterGainNode = audioContext.createGain();
-    masterGainNode.connect(audioContext.destination);
-    masterGainNode.gain.value = 0.5; // Example of setting the gain value correctly
+    const gainNode = audioContext.createGain().connect(audioContext.destination);
+    gainNode.gain = 0.5; // Initialize gain to a reasonable level to control volume
 
     let state = {
         bpm: 78,
@@ -39,78 +37,116 @@ Your browser does not support the audio element.
         nextNoteTime: audioContext.currentTime,
         scheduledNotes: [],
         scheduleMultiplier: 1,
-        activeSources: [],
     };
 
-    // Enhanced playNote function with crossfading and gain node management
+    document.addEventListener('DOMContentLoaded', () => {
+        console.log("[DOMContentLoaded] Loading audio data...");
+        fetchAndDecodeAudio("audionalData");
+    });
+
+    document.getElementById("OB1_Image").addEventListener("click", async () => {
+        if (audioContext.state === 'suspended') {
+            await audioContext.resume();
+        }
+        console.log(`[Click Event] Looping state: ${state.isLooping ? "STOP" : "START"}`);
+        state.isLooping ? stopAudioPlayback() : playAudioBuffer();
+    });
+
+    async function fetchAndDecodeAudio(elementId) {
+        console.log(`[fetchAndDecodeAudio] Fetching audio for element: ${elementId}`);
+        const audioElement = document.getElementById(elementId);
+        if (!audioElement) {
+            console.error("Audio element not found:", elementId);
+            return;
+        }
+        const audioSrc = audioElement.querySelector('source')?.src || audioElement.src;
+        if (!audioSrc) {
+            console.error("Audio source not found for element:", elementId);
+            return;
+        }
+
+        try {
+            const response = await fetch(audioSrc);
+            const arrayBuffer = await response.arrayBuffer();
+            audioContext.decodeAudioData(arrayBuffer, (buffer) => {
+                state.audioBuffer = buffer;
+                console.log("[fetchAndDecodeAudio] Audio data fetched and decoded successfully.");
+            }, (error) => {
+                console.error("Error decoding audio data:", error);
+            });
+        } catch (error) {
+            console.error("Error fetching audio data:", error);
+        }
+    }
+
+    function scheduleNextNote() {
+        if (!state.isLooping || !state.audioBuffer) {
+            console.log("[scheduleNextNote] Aborted: Either not looping or audioBuffer is null.");
+            return;
+        }
+
+        let currentTime = audioContext.currentTime;
+        console.log(`[scheduleNextNote] Current time: ${currentTime}`);
+
+        // Adjusted to check if it's time to play or schedule the next note
+        if (currentTime >= state.nextNoteTime) {
+            playNote();
+            // Immediately calculate and update nextNoteTime for the next note
+            state.nextNoteTime += calculateBeatDuration(state.bpm) / state.scheduleMultiplier;
+        }
+
+        // Calculate the delay until the function should check again and ensure it's not zero
+        let delayUntilNextCheck = Math.max((state.nextNoteTime - currentTime) * 1000, 10); // Use a minimum delay to avoid tight loops
+        console.log(`[scheduleNextNote] Scheduling next check in: ${delayUntilNextCheck}ms`);
+        setTimeout(scheduleNextNote, delayUntilNextCheck);
+    }
+
+
     function playNote() {
+        console.log("[playNote] Playing note.");
         const source = audioContext.createBufferSource();
         source.buffer = state.audioBuffer;
         const envelopeGainNode = audioContext.createGain();
-        source.connect(envelopeGainNode).connect(masterGainNode);
+        source.connect(envelopeGainNode).connect(gainNode);
 
         const currentTime = audioContext.currentTime;
+        envelopeGainNode.gain.setValueAtTime(0.5, currentTime);
+        console.log(`[playNote] Gain set to 0.5 at time: ${currentTime}`);
 
-        // Start with a very low gain to prevent the initial loud pop
-        envelopeGainNode.gain.setValueAtTime(0.01, currentTime); 
-
-        // Smoother fade-in
-        envelopeGainNode.gain.linearRampToValueAtTime(1, currentTime + 0.1); // Adjusted fade-in time
-
-        // Ensure the rest of your gain adjustments are also smooth and well-timed
-        envelopeGainNode.gain.setValueAtTime(1, currentTime + state.audioBuffer.duration - 0.1);
-        envelopeGainNode.gain.linearRampToValueAtTime(0, currentTime + state.audioBuffer.duration);
-
-        // If there are active sources, ensure crossfades are smooth and consider their timing
-        if (state.activeSources.length > 0) {
-            crossfade(state.activeSources[state.activeSources.length - 1].gain, envelopeGainNode, 0.5);
-        }
-
-        state.activeSources.push({source, gain: envelopeGainNode});
         source.start(currentTime);
-
         source.onended = () => {
+            console.log("[playNote] Source ended. Cleaning up.");
             envelopeGainNode.disconnect();
-            state.activeSources = state.activeSources.filter(s => s.source !== source);
+            source.disconnect();
         };
-
         state.scheduledNotes.push(source);
     }
 
     function playAudioBuffer() {
         if (!state.isLooping) {
+            console.log("[playAudioBuffer] Starting audio playback.");
             state.isLooping = true;
-            // Ensure starting with a clean slate by recalibrating startTime and nextNoteTime
             state.startTime = audioContext.currentTime;
+            // Directly schedule the first note to ensure it plays
             state.nextNoteTime = state.startTime;
             scheduleNextNote();
         }
     }
-        document.addEventListener('DOMContentLoaded', async () => {
-        // Assuming "audionalData" is an ID for an element containing the audio source URL.
-        await fetchAndDecodeAudio("audionalData"); // Pre-fetch and decode audio
-        
-        document.getElementById("OB1_Image").addEventListener("click", () => {
-            // Toggle play and stop based on isLooping state
-            state.isLooping ? stopAudioPlayback() : playAudioBuffer();
-        });
-    });
 
 
 
     function stopAudioPlayback() {
-        // Enhanced to ensure proper cleanup
-        state.isLooping = false;
-        state.scheduledNotes.forEach(source => source.stop());
-        state.scheduledNotes = [];
-        state.activeSources.forEach(({source, gain}) => {
-            gain.disconnect();
-            source.disconnect();
-        });
-        state.activeSources = [];
+        if (state.isLooping) {
+            state.isLooping = false;
+            state.scheduledNotes.forEach(source => source.stop());
+            state.scheduledNotes = [];
+            // Optionally, reset nextNoteTime and startTime here if you want to ensure
+            // they are recalibrated on next playback start.
+            // However, this might not be necessary if playAudioBuffer always sets them correctly.
+        }
     }
 
-   
+
 
     // Util function to calculate beat duration
     function calculateBeatDuration(bpm) {
@@ -152,57 +188,7 @@ Your browser does not support the audio element.
         setTimeout(() => element.classList.remove('show'), duration);
     }
 
-    async function fetchAndDecodeAudio(elementId) {
-        const audioElement = document.getElementById(elementId);
-        const audioSrc = audioElement.querySelector('source')?.src || audioElement.src;
-        if (!audioSrc) {
-        console.error("Audio source URL not found.");
-        return;
-    }
-        try {
-            const response = await fetch(audioSrc);
-            const arrayBuffer = await response.arrayBuffer();
-            state.audioBuffer = await audioContext.decodeAudioData(arrayBuffer);
-            console.log("Audio preloaded successfully.");
-        } catch (error) {
-            console.error("Error fetching or decoding audio data:", error);
-        }
-    }
-        
 
-    function scheduleNextNote() {
-        if (!state.isLooping || !state.audioBuffer) return;
-
-        let currentTime = audioContext.currentTime;
-        // Calculate the total number of beats that should have elapsed by now
-        let totalBeatsElapsed = (currentTime - state.startTime) / calculateBeatDuration(state.bpm);
-        // Adjust for the schedule multiplier
-        let adjustedBeatsElapsed = totalBeatsElapsed * state.scheduleMultiplier;
-        // Calculate the time for the next note based on these beats
-        let nextNoteExactTime = state.startTime + Math.ceil(adjustedBeatsElapsed) * calculateBeatDuration(state.bpm) / state.scheduleMultiplier;
-
-        if (currentTime >= state.nextNoteTime) {
-            playNote();
-            // Update nextNoteTime to the time calculated for the next note
-            state.nextNoteTime = nextNoteExactTime;
-        }
-
-        // Calculate the delay until the function should check again, and ensure it's not negative
-        let delayUntilNextCheck = Math.max(state.nextNoteTime - currentTime, 0) * 1000;
-        setTimeout(scheduleNextNote, delayUntilNextCheck);
-    }
-
-    // Crossfade between two gain nodes
-    function crossfade(sourceA, sourceB, duration = 1) {
-        const currentTime = audioContext.currentTime;
-        sourceA.gain.setValueAtTime(sourceA.gain.value, currentTime);
-        sourceA.gain.linearRampToValueAtTime(0, currentTime + duration);
-        sourceB.gain.setValueAtTime(0, currentTime);
-        sourceB.gain.linearRampToValueAtTime(1, currentTime + duration);
-    }
-
-
-    
     document.addEventListener('bpmChange', (event) => {
         const adjustment = event.detail.adjustment;
         updateBPM(state.bpm + adjustment);
