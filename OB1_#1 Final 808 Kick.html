@@ -39,45 +39,60 @@ Your browser does not support the audio element.
         scheduleMultiplier: 1,
     };
 
-    document.addEventListener('DOMContentLoaded', () => {
-        console.log("[DOMContentLoaded] Loading audio data...");
-        fetchAndDecodeAudio("audionalData");
-    });
+    document.addEventListener('DOMContentLoaded', () => fetchAndDecodeAudio("audionalData"));
 
     document.getElementById("OB1_Image").addEventListener("click", async () => {
-        if (audioContext.state === 'suspended') {
-            await audioContext.resume();
-        }
+        if (audioContext.state === 'suspended') await audioContext.resume();
         console.log(`[Click Event] Looping state: ${state.isLooping ? "STOP" : "START"}`);
         state.isLooping ? stopAudioPlayback() : playAudioBuffer();
     });
+
+    document.addEventListener('keydown', event => {
+        if (event.key === ' ' || event.keyCode === 32) playSampleOnce();
+    });
+
+    document.addEventListener('bpmChange', event => updateBPM(state.bpm + event.detail.adjustment));
+
+    document.addEventListener('multiplierChange', event => {
+        state.scheduleMultiplier = event.detail.multiplier === 1 ? 1 : state.scheduleMultiplier * event.detail.multiplier;
+        displayUpdate('BPM', `Multiplier: ${state.scheduleMultiplier.toFixed(2)}`);
+    });
+
+
+    function playSampleOnce() {
+        const sampleSource = audioContext.createBufferSource();
+        sampleSource.buffer = state.audioBuffer; // Assuming this is your sample buffer
+        sampleSource.connect(audioContext.destination); // Connect to destination or through any gain nodes
+        sampleSource.start(); // Start playback
+        sampleSource.onended = () => {
+            // Handle any cleanup or state updates needed after playback
+        };
+    }
 
     async function fetchAndDecodeAudio(elementId) {
         console.log(`[fetchAndDecodeAudio] Fetching audio for element: ${elementId}`);
         const audioElement = document.getElementById(elementId);
         if (!audioElement) {
-            console.error("Audio element not found:", elementId);
-            return;
+            return console.error("Audio element not found:", elementId);
         }
+
         const audioSrc = audioElement.querySelector('source')?.src || audioElement.src;
         if (!audioSrc) {
-            console.error("Audio source not found for element:", elementId);
-            return;
+            return console.error("Audio source not found for element:", elementId);
         }
 
         try {
             const response = await fetch(audioSrc);
             const arrayBuffer = await response.arrayBuffer();
-            audioContext.decodeAudioData(arrayBuffer, (buffer) => {
+            audioContext.decodeAudioData(arrayBuffer, buffer => {
                 state.audioBuffer = buffer;
                 console.log("[fetchAndDecodeAudio] Audio data fetched and decoded successfully.");
-            }, (error) => {
-                console.error("Error decoding audio data:", error);
-            });
+            }, error => console.error("Error decoding audio data:", error));
         } catch (error) {
             console.error("Error fetching audio data:", error);
         }
     }
+
 
     function scheduleNextNote() {
         if (!state.isLooping || !state.audioBuffer) {
@@ -85,37 +100,25 @@ Your browser does not support the audio element.
             return;
         }
 
-        let currentTime = audioContext.currentTime;
-        console.log(`[scheduleNextNote] Current time: ${currentTime}`);
-
-        // Adjusted to check if it's time to play or schedule the next note
+        const currentTime = audioContext.currentTime;
         if (currentTime >= state.nextNoteTime) {
             playNote();
-            // Immediately calculate and update nextNoteTime for the next note
             state.nextNoteTime += calculateBeatDuration(state.bpm) / state.scheduleMultiplier;
         }
 
-        // Calculate the delay until the function should check again and ensure it's not zero
-        let delayUntilNextCheck = Math.max((state.nextNoteTime - currentTime) * 1000, 10); // Use a minimum delay to avoid tight loops
-        console.log(`[scheduleNextNote] Scheduling next check in: ${delayUntilNextCheck}ms`);
+        const delayUntilNextCheck = Math.max((state.nextNoteTime - currentTime) * 1000, 10);
         setTimeout(scheduleNextNote, delayUntilNextCheck);
     }
 
-
     function playNote() {
-        console.log("[playNote] Playing note.");
         const source = audioContext.createBufferSource();
         source.buffer = state.audioBuffer;
         const envelopeGainNode = audioContext.createGain();
-        source.connect(envelopeGainNode).connect(gainNode);
+        source.connect(envelopeGainNode).connect(audioContext.destination);
 
-        const currentTime = audioContext.currentTime;
-        envelopeGainNode.gain.setValueAtTime(0.5, currentTime);
-        console.log(`[playNote] Gain set to 0.5 at time: ${currentTime}`);
-
-        source.start(currentTime);
+        envelopeGainNode.gain.setValueAtTime(0.5, audioContext.currentTime);
+        source.start(audioContext.currentTime);
         source.onended = () => {
-            console.log("[playNote] Source ended. Cleaning up.");
             envelopeGainNode.disconnect();
             source.disconnect();
         };
@@ -124,25 +127,17 @@ Your browser does not support the audio element.
 
     function playAudioBuffer() {
         if (!state.isLooping) {
-            console.log("[playAudioBuffer] Starting audio playback.");
             state.isLooping = true;
-            state.startTime = audioContext.currentTime;
-            // Directly schedule the first note to ensure it plays
-            state.nextNoteTime = state.startTime;
+            state.startTime = state.nextNoteTime = audioContext.currentTime;
             scheduleNextNote();
         }
     }
-
-
 
     function stopAudioPlayback() {
         if (state.isLooping) {
             state.isLooping = false;
             state.scheduledNotes.forEach(source => source.stop());
             state.scheduledNotes = [];
-            // Optionally, reset nextNoteTime and startTime here if you want to ensure
-            // they are recalibrated on next playback start.
-            // However, this might not be necessary if playAudioBuffer always sets them correctly.
         }
     }
 
@@ -164,60 +159,24 @@ Your browser does not support the audio element.
         displayUpdate('BPM', `${newBPM} BPM`);
     }
 
-   // Function to display BPM or scheduling multiplier changes
     function displayUpdate(elementId, text, duration = 3000) {
         const element = document.getElementById(elementId);
-        // Check if the update is for the multiplier
-        if (text.startsWith("Multiplier:")) {
-            const rawMultiplierText = text.split(": ")[1]; // Get the numeric part of the text
-            let multiplier = parseFloat(rawMultiplierText);
-            let displayText = " ";
+        element.textContent = text.startsWith("Multiplier:") 
+            ? calculateDisplayTextForMultiplier(text.split(": ")[1]) 
+            : text;
 
-            // Adjust the display text based on the multiplier value
-            if (multiplier > 1) {
-                // Multiplier is greater than 1, indicating a faster rate (doubling)
-                let times = multiplier; // Use the multiplier directly since it's intended to show doubling
-                displayText += `x${times}`;
-            } else if (multiplier < 1 && multiplier > 0) {
-                // Multiplier is less than 1, indicating a slower rate (halving)
-                let fraction = 1 / multiplier; // Convert to fraction for display
-                displayText += `1/${fraction}`;
-            } else {
-                // Multiplier is exactly 1, indicating the normal rate
-                displayText += `1:1`;
-            }
-
-            element.textContent = displayText;
-        } else {
-            // For BPM updates or other text, display as is
-            element.textContent = text;
-        }
-
-        // Temporarily show the updated text with some visual feedback
         element.classList.add('show');
         setTimeout(() => element.classList.remove('show'), duration);
     }
 
-
-  // Listener for handling BPM changes
-    document.addEventListener('bpmChange', (event) => {
-        const adjustment = event.detail.adjustment;
-        updateBPM(state.bpm + adjustment);
-    });
-
-    document.addEventListener('multiplierChange', (event) => {
-    // Check if the event is to reset the multiplier
-    if (event.detail.multiplier === 1) {
-        // Directly reset the scheduleMultiplier to 1
-        state.scheduleMultiplier = 1;
-    } else {
-        // Otherwise, apply the multiplier as before
-        state.scheduleMultiplier *= event.detail.multiplier;
+    function calculateDisplayTextForMultiplier(rawMultiplierText) {
+        let multiplier = parseFloat(rawMultiplierText);
+        return multiplier > 1 ? `x${multiplier}` 
+            : multiplier < 1 && multiplier > 0 ? `1/${1 / multiplier}` 
+            : `1:1`;
     }
-    // Update the display to reflect the current multiplier
-    displayUpdate('BPM', `Multiplier: ${state.scheduleMultiplier.toFixed(2)}`); // Using toFixed(2) for cleaner display
-});
 
+  
 
 </script>
 <script src="OB2_ActiveTab_Hotkeys_2.js"></script>
