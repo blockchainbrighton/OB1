@@ -1,62 +1,41 @@
-// OB1_ActiveTab_Hotkeys.js
-
-let initialMultiplier = 1; // Assuming 1 is the default multiplier
-
+// OB1_ActiveTab_Hotkeys_2.js
 
 document.addEventListener('keydown', (event) => {
-    // Dispatch custom events for BPM and scheduling multiplier adjustments
-    const bpmEvent = new CustomEvent('bpmChange', {
-        detail: { adjustment: 0 }
-    });
+    const bpmEvent = new CustomEvent('bpmChange', { detail: { adjustment: 0 } });
+    const multiplierEvent = new CustomEvent('multiplierChange', { detail: { multiplier: 1 } });
 
-    const multiplierEvent = new CustomEvent('multiplierChange', {
-        detail: { multiplier: initialMultiplier } // Use initialMultiplier for resetting
-    });
-
-    // Adjust scheduling multipliers directly with '+' and '-'
-    if (event.key === '=' && !event.shiftKey && !event.ctrlKey) {
-        multiplierEvent.detail.multiplier = 2; // Double the multiplier
-        console.log(`Dispatching multiplierChange event, multiplier: ${multiplierEvent.detail.multiplier}`);
-        document.dispatchEvent(multiplierEvent);
-    } else if (event.key === '-' && !event.shiftKey && !event.ctrlKey) {
-        multiplierEvent.detail.multiplier = 0.5; // Halve the multiplier
+    // Adjust scheduling multiplier
+    if ((event.key === '=' || event.key === '-') && !event.shiftKey && !event.ctrlKey) {
+        multiplierEvent.detail.multiplier = (event.key === '=') ? 2 : 0.5;
         console.log(`Dispatching multiplierChange event, multiplier: ${multiplierEvent.detail.multiplier}`);
         document.dispatchEvent(multiplierEvent);
     }
 
-    // Reset scheduling multiplier to the initial value with '0'
-    if (event.key === '0' && !event.shiftKey && !event.ctrlKey) {
-        // Reset the multiplier to its initial value
-        multiplierEvent.detail.multiplier = initialMultiplier;
-        console.log(`Resetting multiplier to initial value: ${multiplierEvent.detail.multiplier}`);
-        document.dispatchEvent(multiplierEvent);
+    // BPM Adjustment
+    // Adjust for "+" (Shift + "=") and "-" directly
+    if (event.key === '+' && event.shiftKey && !event.ctrlKey) {
+        bpmEvent.detail.adjustment = 1; // BPM +1
+    } else if (event.key === '_' && event.shiftKey && !event.ctrlKey) {
+        bpmEvent.detail.adjustment = -1; // BPM -1
     }
 
-    // Use Shift + '=' for a single BPM increase to align with common key event handling
-    if (event.key === '=' && event.shiftKey && !event.ctrlKey) {
-        bpmEvent.detail.adjustment = 1;
-        console.log(`Dispatching bpmChange event, adjustment: ${bpmEvent.detail.adjustment}`);
-        document.dispatchEvent(bpmEvent);
-    }
-
-    // Decrease BPM by 1 with Shift + '-'
-    if (event.key === '-' && event.shiftKey && !event.ctrlKey) {
-        bpmEvent.detail.adjustment = -1;
-        console.log(`Dispatching bpmChange event, adjustment: ${bpmEvent.detail.adjustment}`);
-        document.dispatchEvent(bpmEvent);
-    }
-
-    // Increase BPM by 10 with Control + Shift + '='
+    // Adjust for Control + Shift + "=" and Control + Shift + "-"
     if (event.key === '=' && event.shiftKey && event.ctrlKey) {
-        bpmEvent.detail.adjustment = 10;
+        bpmEvent.detail.adjustment = 10; // BPM +10
+    } else if (event.key === '_' && event.shiftKey && event.ctrlKey) {
+        bpmEvent.detail.adjustment = -10; // BPM -10
+    }
+
+    // Dispatch BPM event if adjustment is not zero
+    if (bpmEvent.detail.adjustment !== 0) {
         console.log(`Dispatching bpmChange event, adjustment: ${bpmEvent.detail.adjustment}`);
         document.dispatchEvent(bpmEvent);
     }
 
-    // Decrease BPM by 10 with Control + Shift + '-'
-    if (event.key === '-' && event.shiftKey && event.ctrlKey) {
-        bpmEvent.detail.adjustment = -10;
-        console.log(`Dispatching bpmChange event, adjustment: ${bpmEvent.detail.adjustment}`);
-        document.dispatchEvent(bpmEvent);
+    // Reset scheduling multiplier with '0'
+    if (event.key === '0' && !event.shiftKey && !event.ctrlKey) {
+        console.log(`Resetting multiplier to initial value: 1`);
+        document.dispatchEvent(new CustomEvent('multiplierChange', { detail: { multiplier: 1 } }));
     }
+    
 });

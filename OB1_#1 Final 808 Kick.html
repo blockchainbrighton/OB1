@@ -164,31 +164,42 @@ Your browser does not support the audio element.
         displayUpdate('BPM', `${newBPM} BPM`);
     }
 
-    // Function to display BPM or scheduling multiplier changes
+   // Function to display BPM or scheduling multiplier changes
     function displayUpdate(elementId, text, duration = 3000) {
         const element = document.getElementById(elementId);
-        // If text starts with "Multiplier", adjust the display logic
-        if (text.startsWith("Multiplier")) {
-            const multiplier = parseFloat(text.split(": ")[1]);
-            let displayText = `Multiplier: `;
-            // Reverse the display logic
+        // Check if the update is for the multiplier
+        if (text.startsWith("Multiplier:")) {
+            const rawMultiplierText = text.split(": ")[1]; // Get the numeric part of the text
+            let multiplier = parseFloat(rawMultiplierText);
+            let displayText = " ";
+
+            // Adjust the display text based on the multiplier value
             if (multiplier > 1) {
-                displayText += `1/${multiplier}`;
-            } else if (multiplier < 1) {
-                displayText += `${1/multiplier}`;
+                // Multiplier is greater than 1, indicating a faster rate (doubling)
+                let times = multiplier; // Use the multiplier directly since it's intended to show doubling
+                displayText += `x${times}`;
+            } else if (multiplier < 1 && multiplier > 0) {
+                // Multiplier is less than 1, indicating a slower rate (halving)
+                let fraction = 1 / multiplier; // Convert to fraction for display
+                displayText += `1/${fraction}`;
             } else {
-                displayText += `1`; // Assuming multiplier can be exactly 1
+                // Multiplier is exactly 1, indicating the normal rate
+                displayText += `1:1`;
             }
+
             element.textContent = displayText;
         } else {
-            // For other updates, use the text as is
+            // For BPM updates or other text, display as is
             element.textContent = text;
         }
+
+        // Temporarily show the updated text with some visual feedback
         element.classList.add('show');
         setTimeout(() => element.classList.remove('show'), duration);
     }
 
 
+  // Listener for handling BPM changes
     document.addEventListener('bpmChange', (event) => {
         const adjustment = event.detail.adjustment;
         updateBPM(state.bpm + adjustment);
