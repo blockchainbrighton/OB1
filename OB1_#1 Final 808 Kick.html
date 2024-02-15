@@ -26,8 +26,11 @@ Your browser does not support the audio element.
 
 </style>
 <script>
+   // Ensure this setup occurs before any interaction or usage
     const audioContext = new (window.AudioContext || window.webkitAudioContext)();
-    const gainNode = audioContext.createGain().connect(audioContext.destination);
+    const masterGainNode = audioContext.createGain();
+    masterGainNode.connect(audioContext.destination);
+    masterGainNode.gain.value = 0.5; // Example of setting the gain value correctly
 
     let state = {
         bpm: 78,
@@ -36,7 +39,78 @@ Your browser does not support the audio element.
         nextNoteTime: audioContext.currentTime,
         scheduledNotes: [],
         scheduleMultiplier: 1,
+        activeSources: [],
     };
+
+    // Enhanced playNote function with crossfading and gain node management
+    function playNote() {
+        const source = audioContext.createBufferSource();
+        source.buffer = state.audioBuffer;
+        const envelopeGainNode = audioContext.createGain();
+        source.connect(envelopeGainNode).connect(masterGainNode);
+
+        const currentTime = audioContext.currentTime;
+
+        // Start with a very low gain to prevent the initial loud pop
+        envelopeGainNode.gain.setValueAtTime(0.01, currentTime); 
+
+        // Smoother fade-in
+        envelopeGainNode.gain.linearRampToValueAtTime(1, currentTime + 0.1); // Adjusted fade-in time
+
+        // Ensure the rest of your gain adjustments are also smooth and well-timed
+        envelopeGainNode.gain.setValueAtTime(1, currentTime + state.audioBuffer.duration - 0.1);
+        envelopeGainNode.gain.linearRampToValueAtTime(0, currentTime + state.audioBuffer.duration);
+
+        // If there are active sources, ensure crossfades are smooth and consider their timing
+        if (state.activeSources.length > 0) {
+            crossfade(state.activeSources[state.activeSources.length - 1].gain, envelopeGainNode, 0.5);
+        }
+
+        state.activeSources.push({source, gain: envelopeGainNode});
+        source.start(currentTime);
+
+        source.onended = () => {
+            envelopeGainNode.disconnect();
+            state.activeSources = state.activeSources.filter(s => s.source !== source);
+        };
+
+        state.scheduledNotes.push(source);
+    }
+
+    function playAudioBuffer() {
+        if (!state.isLooping) {
+            state.isLooping = true;
+            // Ensure starting with a clean slate by recalibrating startTime and nextNoteTime
+            state.startTime = audioContext.currentTime;
+            state.nextNoteTime = state.startTime;
+            scheduleNextNote();
+        }
+    }
+        document.addEventListener('DOMContentLoaded', async () => {
+        // Assuming "audionalData" is an ID for an element containing the audio source URL.
+        await fetchAndDecodeAudio("audionalData"); // Pre-fetch and decode audio
+        
+        document.getElementById("OB1_Image").addEventListener("click", () => {
+            // Toggle play and stop based on isLooping state
+            state.isLooping ? stopAudioPlayback() : playAudioBuffer();
+        });
+    });
+
+
+
+    function stopAudioPlayback() {
+        // Enhanced to ensure proper cleanup
+        state.isLooping = false;
+        state.scheduledNotes.forEach(source => source.stop());
+        state.scheduledNotes = [];
+        state.activeSources.forEach(({source, gain}) => {
+            gain.disconnect();
+            source.disconnect();
+        });
+        state.activeSources = [];
+    }
+
+   
 
     // Util function to calculate beat duration
     function calculateBeatDuration(bpm) {
@@ -81,15 +155,20 @@ Your browser does not support the audio element.
     async function fetchAndDecodeAudio(elementId) {
         const audioElement = document.getElementById(elementId);
         const audioSrc = audioElement.querySelector('source')?.src || audioElement.src;
-
+        if (!audioSrc) {
+        console.error("Audio source URL not found.");
+        return;
+    }
         try {
             const response = await fetch(audioSrc);
             const arrayBuffer = await response.arrayBuffer();
             state.audioBuffer = await audioContext.decodeAudioData(arrayBuffer);
+            console.log("Audio preloaded successfully.");
         } catch (error) {
             console.error("Error fetching or decoding audio data:", error);
         }
     }
+        
 
     function scheduleNextNote() {
         if (!state.isLooping || !state.audioBuffer) return;
@@ -113,50 +192,17 @@ Your browser does not support the audio element.
         setTimeout(scheduleNextNote, delayUntilNextCheck);
     }
 
-
-    function playNote() {
-        const source = audioContext.createBufferSource();
-        source.buffer = state.audioBuffer;
-        const envelopeGainNode = audioContext.createGain();
-        source.connect(envelopeGainNode).connect(gainNode);
-
+    // Crossfade between two gain nodes
+    function crossfade(sourceA, sourceB, duration = 1) {
         const currentTime = audioContext.currentTime;
-        envelopeGainNode.gain.setValueAtTime(0, currentTime);
-        envelopeGainNode.gain.linearRampToValueAtTime(1, currentTime + 0.03); // Fade in
-        envelopeGainNode.gain.setValueAtTime(1, currentTime + state.audioBuffer.duration - 0.1);
-        envelopeGainNode.gain.linearRampToValueAtTime(0, currentTime + state.audioBuffer.duration); // Fade out
-
-        source.start(currentTime);
-        state.scheduledNotes.push(source);
+        sourceA.gain.setValueAtTime(sourceA.gain.value, currentTime);
+        sourceA.gain.linearRampToValueAtTime(0, currentTime + duration);
+        sourceB.gain.setValueAtTime(0, currentTime);
+        sourceB.gain.linearRampToValueAtTime(1, currentTime + duration);
     }
 
-    function stopAudioPlayback() {
-        if (state.isLooping) {
-            state.isLooping = false;
-            state.scheduledNotes.forEach(source => source.stop());
-            state.scheduledNotes = [];
-            // Optionally, reset nextNoteTime and startTime here if you want to ensure
-            // they are recalibrated on next playback start.
-            // However, this might not be necessary if playAudioBuffer always sets them correctly.
-        }
-    }
 
-    function playAudioBuffer() {
-        if (!state.isLooping) {
-            state.isLooping = true;
-            // Ensure starting with a clean slate by recalibrating startTime and nextNoteTime
-            state.startTime = audioContext.currentTime;
-            state.nextNoteTime = state.startTime;
-            scheduleNextNote();
-        }
-    }
-    document.getElementById("OB1_Image").addEventListener("click", async () => {
-        if (!state.audioBuffer) {
-            await fetchAndDecodeAudio("audionalData");
-        }
-        state.isLooping ? stopAudioPlayback() : playAudioBuffer();
-    });
-
+    
     document.addEventListener('bpmChange', (event) => {
         const adjustment = event.detail.adjustment;
         updateBPM(state.bpm + adjustment);

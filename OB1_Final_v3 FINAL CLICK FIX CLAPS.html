@@ -94,13 +94,22 @@ Your browser does not support the audio element.
     function scheduleNextNote() {
         if (!state.isLooping || !state.audioBuffer) return;
 
-        const timeUntilNextNote = state.nextNoteTime - audioContext.currentTime;
-        if (timeUntilNextNote <= 0) {
+        let currentTime = audioContext.currentTime;
+        // Calculate the total number of beats that should have elapsed by now
+        let totalBeatsElapsed = (currentTime - state.startTime) / calculateBeatDuration(state.bpm);
+        // Adjust for the schedule multiplier
+        let adjustedBeatsElapsed = totalBeatsElapsed * state.scheduleMultiplier;
+        // Calculate the time for the next note based on these beats
+        let nextNoteExactTime = state.startTime + Math.ceil(adjustedBeatsElapsed) * calculateBeatDuration(state.bpm) / state.scheduleMultiplier;
+
+        if (currentTime >= state.nextNoteTime) {
             playNote();
-            state.nextNoteTime += calculateBeatDuration(state.bpm) * state.scheduleMultiplier;
+            // Update nextNoteTime to the time calculated for the next note
+            state.nextNoteTime = nextNoteExactTime;
         }
 
-        const delayUntilNextCheck = Math.max(timeUntilNextNote, 0) * 1000;
+        // Calculate the delay until the function should check again, and ensure it's not negative
+        let delayUntilNextCheck = Math.max(state.nextNoteTime - currentTime, 0) * 1000;
         setTimeout(scheduleNextNote, delayUntilNextCheck);
     }
 
