@@ -27,216 +27,145 @@ Your browser does not support the audio element.
 </style>
 <script>
     const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+    const gainNode = audioContext.createGain().connect(audioContext.destination);
 
-    let bpm = 78;
-    let beatDurationSeconds = 60 / bpm;
-    let bpmChanged = false; // Flag to indicate if BPM has changed
+    let state = {
+        bpm: 78,
+        isLooping: false,
+        audioBuffer: null,
+        nextNoteTime: audioContext.currentTime,
+        scheduledNotes: [],
+        scheduleMultiplier: 1,
+    };
 
-
-    let isLooping = false;
-    let audioBuffer = null;
-    let nextNoteTime = audioContext.currentTime;
-    let attackFadeDuration = 0.01; // Initial attack fade duration in seconds, adjustable
-    let tailFadeDuration = 0.001; // Initial tail fade duration in seconds, adjustable
-
-    let scheduledNotes = []; // Array to keep track of scheduled notes
-    let scheduleMultiplier = 1; // Global scheduling multiplier variable
-    let nextNoteTimeout; // Define nextNoteTimeout globally
-
-
-    const gainNode = audioContext.createGain();
-    gainNode.connect(audioContext.destination);
-
-    // Function to update BPM and recalculate beat duration
-    // Modified updateBPM function to restart playback with new BPM
-    function updateBPM(newBPM) {
-        console.log(`[updateBPM] Called at ${new Date().toISOString()} with newBPM: ${newBPM}`);
-        bpm = newBPM;
-        beatDurationSeconds = 60 / bpm;
-        console.log(`[updateBPM] BPM updated to ${bpm}, recalculated beatDurationSeconds to ${beatDurationSeconds}`);
-        bpmChanged = true; // Indicate that BPM has been updated
-        if (isLooping) {
-            stopAudioPlayback(); // Stop playback if it's currently running
-        }
-        displayUpdatedBpm(bpm);
+    // Util function to calculate beat duration
+    function calculateBeatDuration(bpm) {
+        return 60 / bpm;
     }
 
-   // Display the new BPM value on the screen
-    function displayUpdatedBpm(bpm) {
-            console.log(`[displayUpdatedBPM] Called at ${new Date().toISOString()} with newBPM: ${bpm}`);
-            const bpmElement = document.getElementById('BPM');
-            bpmElement.textContent = `${bpm} BPM`;
-
-            // Display the element for 3 seconds
-            bpmElement.classList.add('show');
-            setTimeout(() => {
-                bpmElement.classList.remove('show');
-            }, 3000);
-        }
-
-
-
-    // New function to restart playback if it's currently running
-    function restartPlaybackIfNeeded() {
-        if (isLooping) {
+    // Updates the BPM and manages playback accordingly
+    function updateBPM(newBPM) {
+        console.log(`[updateBPM] Called with newBPM: ${newBPM}`);
+        state.bpm = newBPM;
+        if (state.isLooping) {
             stopAudioPlayback();
             playAudioBuffer();
         }
+        displayUpdate('BPM', `${newBPM} BPM`);
+    }
+
+    // Function to display BPM or scheduling multiplier changes
+    function displayUpdate(elementId, text, duration = 3000) {
+        const element = document.getElementById(elementId);
+        // If text starts with "Multiplier", adjust the display logic
+        if (text.startsWith("Multiplier")) {
+            const multiplier = parseFloat(text.split(": ")[1]);
+            let displayText = `Multiplier: `;
+            // Reverse the display logic
+            if (multiplier > 1) {
+                displayText += `1/${multiplier}`;
+            } else if (multiplier < 1) {
+                displayText += `${1/multiplier}`;
+            } else {
+                displayText += `1`; // Assuming multiplier can be exactly 1
+            }
+            element.textContent = displayText;
+        } else {
+            // For other updates, use the text as is
+            element.textContent = text;
+        }
+        element.classList.add('show');
+        setTimeout(() => element.classList.remove('show'), duration);
     }
 
     async function fetchAndDecodeAudio(elementId) {
         const audioElement = document.getElementById(elementId);
-        const sourceElement = audioElement.querySelector('source');
-        const audioSrc = sourceElement ? sourceElement.src : audioElement.src;
+        const audioSrc = audioElement.querySelector('source')?.src || audioElement.src;
 
         try {
             const response = await fetch(audioSrc);
             const arrayBuffer = await response.arrayBuffer();
-            audioBuffer = await audioContext.decodeAudioData(arrayBuffer);
+            state.audioBuffer = await audioContext.decodeAudioData(arrayBuffer);
         } catch (error) {
             console.error("Error fetching or decoding audio data:", error);
         }
     }
 
     function scheduleNextNote() {
-        console.log(`[scheduleNextNote] Called at ${new Date().toISOString()}`);
-        if (!isLooping || !audioBuffer) {
-            console.log("[scheduleNextNote] Exiting: isLooping or audioBuffer not ready.");
-            clearTimeout(nextNoteTimeout); // Clear the timeout if looping or audio buffer is not ready
-            return;
+        if (!state.isLooping || !state.audioBuffer) return;
+
+        let currentTime = audioContext.currentTime;
+        // Calculate the total number of beats that should have elapsed by now
+        let totalBeatsElapsed = (currentTime - state.startTime) / calculateBeatDuration(state.bpm);
+        // Adjust for the schedule multiplier
+        let adjustedBeatsElapsed = totalBeatsElapsed * state.scheduleMultiplier;
+        // Calculate the time for the next note based on these beats
+        let nextNoteExactTime = state.startTime + Math.ceil(adjustedBeatsElapsed) * calculateBeatDuration(state.bpm) / state.scheduleMultiplier;
+
+        if (currentTime >= state.nextNoteTime) {
+            playNote();
+            // Update nextNoteTime to the time calculated for the next note
+            state.nextNoteTime = nextNoteExactTime;
         }
-        console.log(`Scheduling next note with BPM: ${bpm}, beatDurationSeconds: ${beatDurationSeconds}, nextNoteTime: ${nextNoteTime}`);
 
-        // Clear any future notes that haven't started yet
-        scheduledNotes.forEach(note => note.source.stop(audioContext.currentTime));
-        scheduledNotes = [];
+        // Calculate the delay until the function should check again, and ensure it's not negative
+        let delayUntilNextCheck = Math.max(state.nextNoteTime - currentTime, 0) * 1000;
+        setTimeout(scheduleNextNote, delayUntilNextCheck);
+    }
 
+    function playNote() {
         const source = audioContext.createBufferSource();
-        source.buffer = audioBuffer;
-        source.connect(gainNode);
+        source.buffer = state.audioBuffer;
+        const envelopeGainNode = audioContext.createGain();
+        source.connect(envelopeGainNode).connect(gainNode);
 
-        scheduledNotes.push({source, startTime: nextNoteTime}); // Keep track of this note
+        const currentTime = audioContext.currentTime;
+        envelopeGainNode.gain.setValueAtTime(0, currentTime);
+        envelopeGainNode.gain.linearRampToValueAtTime(1, currentTime + 0.03); // Fade in
+        envelopeGainNode.gain.setValueAtTime(1, currentTime + state.audioBuffer.duration - 0.1);
+        envelopeGainNode.gain.linearRampToValueAtTime(0, currentTime + state.audioBuffer.duration); // Fade out
 
-        gainNode.gain.cancelScheduledValues(nextNoteTime);
-        gainNode.gain.setValueAtTime(0.001, nextNoteTime);
-        gainNode.gain.linearRampToValueAtTime(1, nextNoteTime + attackFadeDuration);
-
-        source.start(nextNoteTime);
-
-        if (audioBuffer.duration > beatDurationSeconds) {
-            const crossFadeStartTime = nextNoteTime + beatDurationSeconds - tailFadeDuration;
-            gainNode.gain.linearRampToValueAtTime(0.001, crossFadeStartTime);
-        }
-
-        // Adjust the nextNoteTime based on the scheduleMultiplier
-        nextNoteTime += beatDurationSeconds * scheduleMultiplier;
-
-        const delayUntilNextNote = Math.max(nextNoteTime - audioContext.currentTime, 0) * 1000;
-        nextNoteTimeout = setTimeout(scheduleNextNote, delayUntilNextNote); // Set the timeout for the next note
-        console.log(`[scheduleNextNote] Note scheduled at ${nextNoteTime}, with delayUntilNextNote: ${delayUntilNextNote}ms`);
+        source.start(currentTime);
+        state.scheduledNotes.push(source);
     }
-
-    document.addEventListener('multiplierChange', (event) => {
-        const multiplier = event.detail.multiplier;
-        // Assuming scheduleMultiplier is your global scheduling multiplier variable
-        scheduleMultiplier *= multiplier;
-        console.log(`Scheduling multiplier adjusted to ${scheduleMultiplier}. Adjusting playback scheduling...`);
-        // Adjust playback scheduling as needed
-        adjustPlaybackScheduling();
-        displayUpdatedSchedulingMultiplier(scheduleMultiplier);
-    });
-
-     // Display the new BPM value on the screen
-     function displayUpdatedSchedulingMultiplier(scheduleMultiplier) {
-        console.log(`[displayUpdatedScheduleMultiplier] Called at ${new Date().toISOString()} with new multiplier value: ${scheduleMultiplier}`);
-        const bpmElement = document.getElementById('BPM');
-        let displayText;
-
-        if (scheduleMultiplier > 1) {
-            displayText = `${scheduleMultiplier}x`;
-        } else {
-            const reciprocal = 1 / scheduleMultiplier;
-            displayText = `1/${reciprocal}x`;
-        }
-
-        bpmElement.textContent = displayText;
-
-        // Display the element for 3 seconds
-        bpmElement.classList.add('show');
-        setTimeout(() => {
-            bpmElement.classList.remove('show');
-        }, 3000);
-    }
-
-
-
-    function adjustPlaybackScheduling() {
-        // Clear any existing timeouts
-        clearTimeout(nextNoteTimeout);
-
-        // Recalculate nextNoteTime based on the updated scheduleMultiplier
-        nextNoteTime = audioContext.currentTime + (beatDurationSeconds * scheduleMultiplier);
-
-        // Calculate the delay until the next note based on the updated nextNoteTime
-        const delayUntilNextNote = Math.max(nextNoteTime - audioContext.currentTime, 0) * 1000;
-
-        // Schedule the next note with the updated delay
-        nextNoteTimeout = setTimeout(scheduleNextNote, delayUntilNextNote);
-
-        console.log(`[adjustPlaybackScheduling] Adjusted playback scheduling. Next note scheduled at ${nextNoteTime}, with delayUntilNextNote: ${delayUntilNextNote}ms`);
-    }
-
-
-    // Adjustments to the playAudioBuffer and stopAudioPlayback functions as needed
-    function playAudioBuffer() {
-        console.log(`[playAudioBuffer] Called at ${new Date().toISOString()}`);
-        if (!isLooping) {
-            isLooping = true;
-            nextNoteTime = audioContext.currentTime;
-            console.log(`[playAudioBuffer] Starting playback. nextNoteTime set to ${nextNoteTime}`);
-            scheduleNextNote(); // Begin scheduling with the new BPM
-            bpmChanged = false; // Reset the BPM changed flag
-        } else if (bpmChanged) {
-            // If playback was looping but BPM was changed, stop and wait for another click
-            console.log("[playAudioBuffer] BPM changed. Waiting for restart.");
-            stopAudioPlayback();
-            bpmChanged = false; // Reset the BPM changed flag
-        } else {
-            console.log("[playAudioBuffer] Playback is already looping.");
-        }
-    }
-
 
     function stopAudioPlayback() {
-        console.log(`[stopAudioPlayback] Called at ${new Date().toISOString()}`);
-        if (isLooping) {
-            isLooping = false;
-            // Additional logic to stop currently playing BufferSource nodes
-            console.log("[stopAudioPlayback] Stopping playback and clearing scheduled notes.");
-            // Assuming scheduledNotes.forEach is called here
-        } else {
-            console.log("[stopAudioPlayback] Playback is already stopped.");
+        if (state.isLooping) {
+            state.isLooping = false;
+            state.scheduledNotes.forEach(source => source.stop());
+            state.scheduledNotes = [];
+            // Optionally, reset nextNoteTime and startTime here if you want to ensure
+            // they are recalibrated on next playback start.
+            // However, this might not be necessary if playAudioBuffer always sets them correctly.
         }
     }
 
+    function playAudioBuffer() {
+        if (!state.isLooping) {
+            state.isLooping = true;
+            // Ensure starting with a clean slate by recalibrating startTime and nextNoteTime
+            state.startTime = audioContext.currentTime;
+            state.nextNoteTime = state.startTime;
+            scheduleNextNote();
+        }
+    }
     document.getElementById("OB1_Image").addEventListener("click", async () => {
-        console.log("Click detected...");
-        if (!audioBuffer) {
+        if (!state.audioBuffer) {
             await fetchAndDecodeAudio("audionalData");
         }
-        if (isLooping) {
-            stopAudioPlayback();
-        } else {
-            playAudioBuffer();
-        }
+        state.isLooping ? stopAudioPlayback() : playAudioBuffer();
     });
 
     document.addEventListener('bpmChange', (event) => {
         const adjustment = event.detail.adjustment;
-        const newBPM = bpm + adjustment;
-        console.log(`BPM adjustment detected. Adjusting from ${bpm} to ${newBPM}.`);
-        updateBPM(newBPM);
+        updateBPM(state.bpm + adjustment);
     });
+
+    document.addEventListener('multiplierChange', (event) => {
+        state.scheduleMultiplier *= event.detail.multiplier;
+        displayUpdate('BPM', `Multiplier: ${state.scheduleMultiplier}`);
+    });
+
 </script>
 <script src="OB1_ActiveTab_Hotkeys.js"></script>
 </body>
