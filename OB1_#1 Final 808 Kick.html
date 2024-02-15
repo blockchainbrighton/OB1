@@ -195,12 +195,21 @@ Your browser does not support the audio element.
     });
 
     document.addEventListener('multiplierChange', (event) => {
+    // Check if the event is to reset the multiplier
+    if (event.detail.multiplier === 1) {
+        // Directly reset the scheduleMultiplier to 1
+        state.scheduleMultiplier = 1;
+    } else {
+        // Otherwise, apply the multiplier as before
         state.scheduleMultiplier *= event.detail.multiplier;
-        displayUpdate('BPM', `Multiplier: ${state.scheduleMultiplier}`);
-    });
+    }
+    // Update the display to reflect the current multiplier
+    displayUpdate('BPM', `Multiplier: ${state.scheduleMultiplier.toFixed(2)}`); // Using toFixed(2) for cleaner display
+});
+
 
 </script>
-<script src="OB1_ActiveTab_Hotkeys.js"></script>
+<script src="OB2_ActiveTab_Hotkeys_2.js"></script>
 </body>
 </html>
 
