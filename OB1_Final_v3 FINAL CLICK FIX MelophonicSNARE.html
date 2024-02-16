@@ -24,11 +24,16 @@
 Your browser does not support the audio element.
 </audio>
 <script>
+    // Create audio context and gain node
     const audioContext = new (window.AudioContext || window.webkitAudioContext)();
-    const gainNode = audioContext.createGain().connect(audioContext.destination);
-    gainNode.gain = 0.5; // Initialize gain to a reasonable level to control volume
+    const gainNode = audioContext.createGain();
 
-    let state = {
+    // Connect the gainNode to the audio context's destination and set initial gain value
+    gainNode.connect(audioContext.destination);
+    gainNode.gain.value = 1;
+
+    // Initialize state object with default values
+    const state = {
         bpm: 78,
         isLooping: false,
         audioBuffer: null,
@@ -37,147 +42,161 @@ Your browser does not support the audio element.
         scheduleMultiplier: 1,
     };
 
+    // Event listener for DOMContentLoaded to fetch and decode audio
     document.addEventListener('DOMContentLoaded', () => fetchAndDecodeAudio("audionalData"));
 
+    // Event listener for image click to toggle audio playback
     document.getElementById("OB1_Image").addEventListener("click", async () => {
         if (audioContext.state === 'suspended') await audioContext.resume();
-        console.log(`[Click Event] Looping state: ${state.isLooping ? "STOP" : "START"}`);
+        const loopingState = state.isLooping ? "STOP" : "START";
+        console.log(`[Click Event] Looping state: ${loopingState}`);
         state.isLooping ? stopAudioPlayback() : playAudioBuffer();
     });
 
+    // Event listener for spacebar press to trigger sample playback
     document.addEventListener('keydown', event => {
         if (event.key === ' ' || event.keyCode === 32) playSampleOnce();
     });
 
+    // Event listener to update BPM on custom event
     document.addEventListener('bpmChange', event => updateBPM(state.bpm + event.detail.adjustment));
 
+    // Event listener to update scheduling multiplier on custom event
     document.addEventListener('multiplierChange', event => {
-        state.scheduleMultiplier = event.detail.multiplier === 1 ? 1 : state.scheduleMultiplier * event.detail.multiplier;
+        // Adjust scheduling multiplier
+        if (event.detail.multiplier !== 1) {
+            state.scheduleMultiplier = Math.max(1 / 32, Math.min(32, state.scheduleMultiplier * event.detail.multiplier));
+        } else {
+            state.scheduleMultiplier = 1;
+            // Optionally reset or recalculate scheduling as needed
+            // restartSchedulingIfNeeded();
+        }
+
+        console.log(`Multiplier adjusted: ${state.scheduleMultiplier}`);
         displayUpdate('BPM', `Multiplier: ${state.scheduleMultiplier.toFixed(2)}`);
     });
 
 
-    function playSampleOnce() {
-        const sampleSource = audioContext.createBufferSource();
-        sampleSource.buffer = state.audioBuffer; // Assuming this is your sample buffer
-        sampleSource.connect(audioContext.destination); // Connect to destination or through any gain nodes
-        sampleSource.start(); // Start playback
-        sampleSource.onended = () => {
-            // Handle any cleanup or state updates needed after playback
-        };
-    }
+  
 
-    async function fetchAndDecodeAudio(elementId) {
-        console.log(`[fetchAndDecodeAudio] Fetching audio for element: ${elementId}`);
-        const audioElement = document.getElementById(elementId);
-        if (!audioElement) {
-            return console.error("Audio element not found:", elementId);
-        }
+     // Play audio sample once
+     function playSampleOnce() {
+         const sampleSource = createAndConnectBufferSource(state.audioBuffer);
+         sampleSource.start();
+         sampleSource.onended = () => { /* Handle any cleanup or state updates needed after playback */ };
+     }
+ 
+     // Fetch and decode audio data
+     async function fetchAndDecodeAudio(elementId) {
+         console.log(`[fetchAndDecodeAudio] Fetching audio for element: ${elementId}`);
+         const audioElement = document.getElementById(elementId);
+         if (!audioElement) return console.error("Audio element not found:", elementId);
+ 
+         const audioSrc = audioElement.querySelector('source')?.src || audioElement.src;
+         if (!audioSrc) return console.error("Audio source not found for element:", elementId);
+ 
+         try {
+             const arrayBuffer = await (await fetch(audioSrc)).arrayBuffer();
+             audioContext.decodeAudioData(arrayBuffer, buffer => {
+                 state.audioBuffer = buffer;
+                 console.log("[fetchAndDecodeAudio] Audio data fetched and decoded successfully.");
+             }, error => console.error("Error decoding audio data:", error));
+         } catch (error) {
+             console.error("Error fetching audio data:", error);
+         }
+     }
+ 
+     // Schedule next note for looping playback
+     function scheduleNextNote() {
+         if (!state.isLooping || !state.audioBuffer) return;
+         const currentTime = audioContext.currentTime;
+         if (currentTime >= state.nextNoteTime) {
+             playNote();
+             state.nextNoteTime += calculateBeatDuration(state.bpm) / state.scheduleMultiplier;
+         }
+         const delayUntilNextCheck = Math.max((state.nextNoteTime - currentTime) * 1000, 10);
+         setTimeout(scheduleNextNote, delayUntilNextCheck);
+     }
+ 
+     // Play a note
+     function playNote() {
+         const source = createAndConnectBufferSource(state.audioBuffer);
+         source.start(audioContext.currentTime);
+         source.onended = () => { source.disconnect(); };
+         state.scheduledNotes.push(source);
+     }
+ 
+     // Create buffer source and connect it to gain node
+     function createAndConnectBufferSource(buffer) {
+         const source = audioContext.createBufferSource();
+         source.buffer = buffer;
+         source.connect(gainNode);
+         return source;
+     }
+ 
+     // Play audio buffer for looping playback
+     function playAudioBuffer() {
+         if (!state.isLooping) {
+             state.isLooping = true;
+             state.startTime = state.nextNoteTime = audioContext.currentTime;
+             scheduleNextNote();
+         }
+     }
+ 
+     // Stop audio playback
+     function stopAudioPlayback() {
+         if (!state.isLooping) return;
+         state.isLooping = false;
+         fadeOutAndStopSources();
+     }
+ 
+     // Fade out and stop all scheduled sources
+     function fadeOutAndStopSources() {
+         const currentTime = audioContext.currentTime;
+         const fadeDuration = 0.1; // Fade out over 100 milliseconds
+         gainNode.gain.setValueAtTime(gainNode.gain.value, currentTime);
+         gainNode.gain.linearRampToValueAtTime(0, currentTime + fadeDuration);
+         setTimeout(() => {
+             state.scheduledNotes.forEach(source => { source.stop(); });
+             state.scheduledNotes = [];
+             gainNode.gain.setValueAtTime(0.5, audioContext.currentTime); // Reset gain after stopping
+         }, fadeDuration * 1000); // Convert seconds to milliseconds
+     }
+ 
+     // Calculate beat duration
+     function calculateBeatDuration(bpm) {
+         return 60 / bpm;
+     }
+ 
+     // Update BPM and restart playback if looping
+     function updateBPM(newBPM) {
+         console.log(`[updateBPM] Called with newBPM: ${newBPM}`);
+         state.bpm = newBPM;
+         if (state.isLooping) {
+             stopAudioPlayback();
+             playAudioBuffer(); // Assumes immediate playback restart with the new BPM
+         }
+         displayUpdate('BPM', `${newBPM} BPM`);
+     }
+ 
+     // Display update with CSS transition
+     function displayUpdate(elementId, text, duration = 3000) {
+         const element = document.getElementById(elementId);
+         element.textContent = text.startsWith("Multiplier:") 
+             ? calculateDisplayTextForMultiplier(text.split(": ")[1]) 
+             : text;
+         element.classList.add('show');
+         setTimeout(() => element.classList.remove('show'), duration);
+     }
+ 
+     // Simplify multiplier display calculation
+     function calculateDisplayTextForMultiplier(rawMultiplierText) {
+         const multiplier = parseFloat(rawMultiplierText);
+         return multiplier !== 1 ? (multiplier > 1 ? `x${multiplier}` : `1/${1 / multiplier}`) : '1:1';
+     }
+ 
+ </script>
+ <script src="OB2_ActiveTab_Hotkeys_2.js"></script>
+ </body>
+ </html>
 
-        const audioSrc = audioElement.querySelector('source')?.src || audioElement.src;
-        if (!audioSrc) {
-            return console.error("Audio source not found for element:", elementId);
-        }
-
-        try {
-            const response = await fetch(audioSrc);
-            const arrayBuffer = await response.arrayBuffer();
-            audioContext.decodeAudioData(arrayBuffer, buffer => {
-                state.audioBuffer = buffer;
-                console.log("[fetchAndDecodeAudio] Audio data fetched and decoded successfully.");
-            }, error => console.error("Error decoding audio data:", error));
-        } catch (error) {
-            console.error("Error fetching audio data:", error);
-        }
-    }
-
-
-    function scheduleNextNote() {
-        if (!state.isLooping || !state.audioBuffer) {
-            console.log("[scheduleNextNote] Aborted: Either not looping or audioBuffer is null.");
-            return;
-        }
-
-        const currentTime = audioContext.currentTime;
-        if (currentTime >= state.nextNoteTime) {
-            playNote();
-            state.nextNoteTime += calculateBeatDuration(state.bpm) / state.scheduleMultiplier;
-        }
-
-        const delayUntilNextCheck = Math.max((state.nextNoteTime - currentTime) * 1000, 10);
-        setTimeout(scheduleNextNote, delayUntilNextCheck);
-    }
-
-    function playNote() {
-        const source = audioContext.createBufferSource();
-        source.buffer = state.audioBuffer;
-        const envelopeGainNode = audioContext.createGain();
-        source.connect(envelopeGainNode).connect(audioContext.destination);
-
-        envelopeGainNode.gain.setValueAtTime(0.5, audioContext.currentTime);
-        source.start(audioContext.currentTime);
-        source.onended = () => {
-            envelopeGainNode.disconnect();
-            source.disconnect();
-        };
-        state.scheduledNotes.push(source);
-    }
-
-    function playAudioBuffer() {
-        if (!state.isLooping) {
-            state.isLooping = true;
-            state.startTime = state.nextNoteTime = audioContext.currentTime;
-            scheduleNextNote();
-        }
-    }
-
-    function stopAudioPlayback() {
-        if (state.isLooping) {
-            state.isLooping = false;
-            state.scheduledNotes.forEach(source => source.stop());
-            state.scheduledNotes = [];
-        }
-    }
-
-// Util function to calculate beat duration remains the same
-    function calculateBeatDuration(bpm) {
-        return 60 / bpm;
-    }
-
-    // Streamlines the BPM update process
-    function updateBPM(newBPM) {
-        console.log(`[updateBPM] Called with newBPM: ${newBPM}`);
-        state.bpm = newBPM;
-        if (state.isLooping) {
-            stopAudioPlayback();
-            playAudioBuffer(); // Assumes immediate playback restart with the new BPM
-        }
-        displayUpdate('BPM', `${newBPM} BPM`);
-    }
-
-    // Optimized display update to handle text presentation
-    function displayUpdate(elementId, text, duration = 3000) {
-        const element = document.getElementById(elementId);
-        element.textContent = text.startsWith("Multiplier:") 
-            ? calculateDisplayTextForMultiplier(text.split(": ")[1]) 
-            : text;
-
-        // Leveraging CSS for visual feedback, reducing the need for direct DOM manipulation
-        element.classList.add('show');
-        setTimeout(() => element.classList.remove('show'), duration);
-    }
-
-    // Simplified multiplier display calculation
-    function calculateDisplayTextForMultiplier(rawMultiplierText) {
-        const multiplier = parseFloat(rawMultiplierText);
-        if (multiplier !== 1) {
-            return multiplier > 1 ? `x${multiplier}` : `1/${1 / multiplier}`;
-        }
-        return '1:1';
-    }
-
-
-</script>
-<script src="OB2_ActiveTab_Hotkeys_2.js"></script>
-</body>
-</html>
