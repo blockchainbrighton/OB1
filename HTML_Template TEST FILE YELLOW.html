@@ -1,0 +1,229 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>OB1 #1 - Audional Art</title><style>body{background-color:#000000;display:flex;justify-content:center;align-items:center;height:100vh;margin:0}img {width: auto;height: auto;max-width: 60%;max-height: 80vh;object-fit: contain;aspect-ratio: 1 / 1;}
+</style></head><body>
+<img id="OB1_Image" src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABkAAAAZCAIAAABLixI0AAAACXBIWXMAAAAnAAAAJwEqCZFPAAAAI0lEQVQ4jWO894yTgUqAiVoGjZo1ataoWaNmjZo1atYwMgsAHIEB/yTuG8QAAAAASUVORK5CYII=" alt="Click to play audio">
+<!-- Audio: Short click sound -->
+<audio id="audionalData" loop data-audionalSampleName="808 Kick Drum">
+<source src="data:audio/wav;base64,UklGRhowAABXQVZFZm10IBAAAAABAAEARKwAABCxAgAEABAAZGF0YUwAAAACAAACABgAZGF0YQAAAAEAkZAgIIEyHjAqeykAAAAA//uQZAUABfQU8WkMAAAAAHHVUUU5VZmUId2luZwAAAAAA//uQZAUABfQU8WkMAAAAAHHVUUU5VZmUId2luZwAAAAAA//uQZAMABfQU8WkMAAAAAHHVUUU5VZmUId2luZwAAAAAA" type="audio/wav">
+Your browser does not support the audio element.
+</audio>
+<div id= "BPM">78 BPM</div> 
+<div id="iframeContainer" style="position: relative; width: 100vw; height: 100vh; display: flex; justify-content: center; align-items: center;">
+<style>
+    #BPM {
+        font-size: 24px; /* Adjust the font size as needed */
+        font-weight: bold;
+        color: rgb(255, 251, 0);
+        position: absolute;
+        top: 5%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        opacity: 0; /* Initially set the opacity to 0 for fade in effect */
+        transition: opacity 0.5s ease-in-out; /* Apply transition for smooth fade in/out */
+    }
+
+    #BPM.show {
+        opacity: 1; /* Set opacity to 1 to make the element visible */
+    }
+    
+    /* Shake in All Directions */
+    
+    @keyframes shake-all-directions {
+        0%, 100% { transform: translate(0); }
+        10% { transform: translate(-5px, -5px); }
+        20% { transform: translate(5px, -5px); }
+        30% { transform: translate(-5px, 5px); }
+        40% { transform: translate(5px, 5px); }
+        50% { transform: translate(-5px, -5px); }
+        60% { transform: translate(5px, 5px); }
+        70% { transform: translate(-5px, 5px); }
+        80% { transform: translate(5px, -5px); }
+        90% { transform: translate(-5px, -5px); }
+    }
+
+    .shake-all-directions-animation {
+        animation: shake-all-directions 0.15s cubic-bezier(.36,.07,.19,.97) both infinite;
+    }
+    
+    #iframeContainer iframe {
+        position: absolute;
+        margin: 20px;
+    }
+   
+</style>
+<script>
+    // Create audio context and gain node
+    const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+    const gainNode = audioContext.createGain();
+    gainNode.connect(audioContext.destination);
+    gainNode.gain.value = 1;
+
+    const state = {
+        bpm: 78,
+        isLooping: false,
+        audioBuffer: null,
+        nextNoteTime: audioContext.currentTime,
+        scheduledNotes: [],
+        scheduleMultiplier: 1,
+    };
+
+    // Functions related to audio processing
+    async function fetchAndDecodeAudio(elementId) {
+        console.log(`[fetchAndDecodeAudio] Fetching audio for element: ${elementId}`);
+        const audioElement = document.getElementById(elementId);
+        if (!audioElement) return console.error("Audio element not found:", elementId);
+
+        const audioSrc = audioElement.querySelector('source')?.src || audioElement.src;
+        if (!audioSrc) return console.error("Audio source not found for element:", elementId);
+
+        try {
+            const arrayBuffer = await (await fetch(audioSrc)).arrayBuffer();
+            audioContext.decodeAudioData(arrayBuffer, buffer => {
+                state.audioBuffer = buffer;
+                console.log("[fetchAndDecodeAudio] Audio data fetched and decoded successfully.");
+            }, error => console.error("Error decoding audio data:", error));
+        } catch (error) {
+            console.error("Error fetching audio data:", error);
+        }
+    }
+
+    // Schedule next note for looping playback
+    function scheduleNextNote() {
+         if (!state.isLooping || !state.audioBuffer) return;
+         const currentTime = audioContext.currentTime;
+         if (currentTime >= state.nextNoteTime) {
+             playNote();
+             state.nextNoteTime += calculateBeatDuration(state.bpm) / state.scheduleMultiplier;
+         }
+         const delayUntilNextCheck = Math.max((state.nextNoteTime - currentTime) * 1000, 10);
+         setTimeout(scheduleNextNote, delayUntilNextCheck);
+     }
+ 
+     // Play a note
+    function playNote() {
+        const source = createAndConnectBufferSource(state.audioBuffer);
+        startAnimation('OB1_Image'); // Start animating the image
+
+        source.start(audioContext.currentTime);
+        source.onended = () => {
+            // Schedule the stop animation with a short delay to ensure it's visible
+            setTimeout(() => {
+                stopAnimation('OB1_Image');
+            }, 150); // Adjust this delay based on the visual effect you desire
+            source.disconnect();
+        };
+        state.scheduledNotes.push(source);
+    }
+ 
+     // Create buffer source and connect it to gain node
+     function createAndConnectBufferSource(buffer) {
+         const source = audioContext.createBufferSource();
+         source.buffer = buffer;
+         source.connect(gainNode);
+         return source;
+     }
+ 
+     // Play audio buffer for looping playback
+     function playAudioBuffer() {
+         if (!state.isLooping) {
+             state.isLooping = true;
+             state.startTime = state.nextNoteTime = audioContext.currentTime;
+             scheduleNextNote();
+         }
+     }
+
+
+    function stopAudioPlayback() {
+        if (!state.isLooping) return;
+        state.isLooping = false;
+        fadeOutAndStopSources();
+    }
+
+    function fadeOutAndStopSources() {
+        const currentTime = audioContext.currentTime;
+        const fadeDuration = 0.1; // Fade out over 100 milliseconds
+        gainNode.gain.setValueAtTime(gainNode.gain.value, currentTime);
+        gainNode.gain.linearRampToValueAtTime(0, currentTime + fadeDuration);
+        setTimeout(() => {
+            state.scheduledNotes.forEach(source => { source.stop(); });
+            state.scheduledNotes = [];
+            gainNode.gain.setValueAtTime(0.5, audioContext.currentTime); // Reset gain after stopping
+        }, fadeDuration * 1000); // Convert seconds to milliseconds
+    }
+ 
+     // Calculate beat duration
+     function calculateBeatDuration(bpm) {
+         return 60 / bpm;
+     }
+ 
+     // Update BPM and restart playback if looping
+     function updateBPM(newBPM) {
+         console.log(`[updateBPM] Called with newBPM: ${newBPM}`);
+         state.bpm = newBPM;
+         if (state.isLooping) {
+             stopAudioPlayback();
+             playAudioBuffer(); // Assumes immediate playback restart with the new BPM
+         }
+         displayUpdate('BPM', `${newBPM} BPM`);
+     }
+ 
+ </script>
+ <script>
+
+    // Track the number of iframes added to control their placement
+    let iframeCount = 0;
+
+    document.addEventListener('keydown', function(event) {
+        if (event.key === 'l' || event.keyCode === 76) {
+            const fileInput = document.createElement('input');
+            fileInput.type = 'file';
+            fileInput.accept = '.html';
+            fileInput.onchange = e => {
+                const file = e.target.files[0];
+                if (!file) return;
+
+                // Create a URL for the selected file
+                const fileURL = URL.createObjectURL(file);
+
+                // Create an iframe and set its source to the file URL
+                const iframe = document.createElement('iframe');
+                positionIframe(iframe, iframeCount++);
+                iframe.src = fileURL;
+                iframe.frameBorder = "0"; // Optional: remove the frame border
+
+                // Append the iframe to the container
+                document.getElementById('iframeContainer').appendChild(iframe);
+            };
+            fileInput.click(); // Programmatically click the file input to open the file dialog
+        }
+    });
+
+    function positionIframe(iframe, count) {
+        // Adjust these values as needed
+        const size = { width: 300, height: 200 }; // Example iframe size
+        iframe.style.width = `${size.width}px`;
+        iframe.style.height = `${size.height}px`;
+
+        // Calculate position based on count to place iframes in a clockwise sequence
+        const positions = [
+            { right: '20px', top: '20px' },    // Top right
+            { right: '20px', bottom: '20px' }, // Bottom right
+            { left: '20px', bottom: '20px' },  // Bottom left
+            { left: '20px', top: '20px' }      // Top left
+        ];
+
+        // Use modulo operator to loop around the positions array
+        const position = positions[count % positions.length];
+        for (const [key, value] of Object.entries(position)) {
+            iframe.style[key] = value;
+        }
+    }
+
+
+    </script>
+    
+ <script src="uiInteractions.js"></script>
+ <script src="animate.js"></script>
+ <script src="OB2_ActiveTab_Hotkeys_2.js"></script>
+ </body>
+ </html>
+
