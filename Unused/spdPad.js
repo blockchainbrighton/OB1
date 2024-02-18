@@ -1,8 +1,5 @@
 // spdPad.js
 
-
-// spdPad.js
-
 // Global variable to store the original URL
 let originalUrl = window.location.href; // This should point to the HTML file with the orange square
 
@@ -18,8 +15,8 @@ function addHtmlPad() {
     const container = document.getElementById('samplerContainer') || createSamplerContainer();
     const iframe = document.createElement('iframe');
     iframe.src = originalUrl; // Use the original URL for all iframes
-    iframe.style.width = '100px'; // Set to the size of the orange square plus a little extra
-    iframe.style.height = '100px'; // Set to the size of the orange square plus a little extra
+    iframe.style.width = '50px'; // Set to the size of the orange square plus a little extra
+    iframe.style.height = '50px'; // Set to the size of the orange square plus a little extra
     iframe.style.margin = '5px';
     iframe.style.border = '1px solid #fff';
     container.appendChild(iframe);
@@ -38,12 +35,23 @@ function createSamplerContainer() {
     return container;
 }
 
-// Function to handle iframe interaction
+// Modified setupPadInteraction function to debug
 function setupPadInteraction(iframe) {
-    iframe.contentWindow.addEventListener('click', function() {
-        setSelectedPad(iframe);
-    });
+    setTimeout(function() {
+        try {
+            const doc = iframe.contentWindow.document;
+            const clickableElement = doc.getElementById('OB1_Image'); // Assuming the image has this ID
+            if (clickableElement) {
+                clickableElement.addEventListener('click', function() {
+                    setSelectedPad(iframe);
+                }, false);
+            }
+        } catch (e) {
+            console.error("Error setting up interaction in iframe: ", e);
+        }
+    }, 500); // Delay may need adjustment
 }
+
 
 let currentSelectedPad = null;
 function setSelectedPad(iframe) {

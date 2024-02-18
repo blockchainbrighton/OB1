@@ -1,0 +1,554 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>OB1 #1 - Audional Art</title><style>body{background-color:#000000;display:flex;justify-content:center;align-items:center;height:100vh;margin:0}img {width: auto;height: auto;max-width: 60%;max-height: 80vh;object-fit: contain;aspect-ratio: 1 / 1;}
+</style></head><body>
+<img id="OB1_Image" src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABkAAAAZCAIAAABLixI0AAAACXBIWXMAAAAnAAAAJwEqCZFPAAAAI0lEQVQ4jWN81s3JQCXARC2DRs0aNWvUrFGzRs0aNWsYmQUAtP4BrHiSyo4AAAAASUVORK5CYII=" alt="Click to play audio">
+<!-- Audio: Short click sound -->
+<audio id="audionalData" loop data-audionalSampleName="808 Kick Drum">
+<source src="data:audio/wav;base64,UklGRhowAABXQVZFZm10IBAAAAABAAEARKwAABCxAgAEABAAZGF0YUwAAAACAAACABgAZGF0YQAAAAEAkZAgIIEyHjAqeykAAAAA//uQZAUABfQU8WkMAAAAAHHVUUU5VZmUId2luZwAAAAAA//uQZAUABfQU8WkMAAAAAHHVUUU5VZmUId2luZwAAAAAA//uQZAMABfQU8WkMAAAAAHHVUUU5VZmUId2luZwAAAAAA" type="audio/wav">
+Your browser does not support the audio element.
+</audio>
+<div id= "BPM">78 BPM</div> 
+<div id="iframeContainer" style="position: relative; width: 100vw; height: 100vh; display: flex; justify-content: center; align-items: center;">
+<style>
+    #BPM {
+        font-size: 24px; /* Adjust the font size as needed */
+        font-weight: bold;
+        color: rgb(255, 251, 0);
+        position: absolute;
+        top: 5%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        opacity: 0; /* Initially set the opacity to 0 for fade in effect */
+        transition: opacity 0.5s ease-in-out; /* Apply transition for smooth fade in/out */
+    }
+
+    #BPM.show {
+        opacity: 1; /* Set opacity to 1 to make the element visible */
+    }
+    
+    /* Shake in All Directions */
+    
+    @keyframes shake-all-directions {
+        0%, 100% { transform: translate(0); }
+        10% { transform: translate(-5px, -5px); }
+        20% { transform: translate(5px, -5px); }
+        30% { transform: translate(-5px, 5px); }
+        40% { transform: translate(5px, 5px); }
+        50% { transform: translate(-5px, -5px); }
+        60% { transform: translate(5px, 5px); }
+        70% { transform: translate(-5px, 5px); }
+        80% { transform: translate(5px, -5px); }
+        90% { transform: translate(-5px, -5px); }
+    }
+
+    .shake-all-directions-animation {
+        animation: shake-all-directions 0.15s cubic-bezier(.36,.07,.19,.97) both infinite;
+    }
+    
+    #iframeContainer iframe {
+        display: flex; /* This will allow the iframes to be in a flex container */
+        flex-wrap: wrap; /* Iframes will wrap to the next line if there's no space */
+        height: 50px;
+        width: 50px;
+        margin: 20px;
+    }
+
+    body, html {
+    margin: 0;
+    padding: 0;
+    width: 100%;
+    height: 100%;
+    overflow: hidden; 
+    }
+    #OB1_Image {
+    width: 100%;
+    height: 100%;
+    }
+   
+</style>
+<script>
+    // Create audio context and gain node
+    const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+    const gainNode = audioContext.createGain();
+    gainNode.connect(audioContext.destination);
+    gainNode.gain.value = 1;
+
+    const state = {
+        bpm: 78,
+        isLooping: false,
+        audioBuffer: null,
+        nextNoteTime: audioContext.currentTime,
+        scheduledNotes: [],
+        scheduleMultiplier: 1,
+    };
+
+    // Functions related to audio processing
+    async function fetchAndDecodeAudio(elementId) {
+        console.log(`[fetchAndDecodeAudio] Fetching audio for element: ${elementId}`);
+        const audioElement = document.getElementById(elementId);
+        if (!audioElement) return console.error("Audio element not found:", elementId);
+
+        const audioSrc = audioElement.querySelector('source')?.src || audioElement.src;
+        if (!audioSrc) return console.error("Audio source not found for element:", elementId);
+
+        try {
+            const arrayBuffer = await (await fetch(audioSrc)).arrayBuffer();
+            audioContext.decodeAudioData(arrayBuffer, buffer => {
+                state.audioBuffer = buffer;
+                console.log("[fetchAndDecodeAudio] Audio data fetched and decoded successfully.");
+            }, error => console.error("Error decoding audio data:", error));
+        } catch (error) {
+            console.error("Error fetching audio data:", error);
+        }
+    }
+
+    // Schedule next note for looping playback
+   // Schedule next note for looping playback with improved timing accuracy
+   function scheduleNextNote() {
+        if (!state.isLooping || !state.audioBuffer) return;
+
+        const scheduleNote = () => {
+            if (!state.isLooping) return;
+            const currentTime = audioContext.currentTime;
+            while (state.nextNoteTime < currentTime + 0.1) { // Schedule notes ahead of time
+                playNote(state.nextNoteTime);
+                state.nextNoteTime += calculateBeatDuration(state.bpm) / state.scheduleMultiplier;
+            }
+            requestAnimationFrame(scheduleNote);
+        };
+        scheduleNote();
+    }
+ 
+     // Play a note
+    function playNote() {
+        const source = createAndConnectBufferSource(state.audioBuffer);
+        startAnimation('OB1_Image'); // Start animating the image
+
+        source.start(audioContext.currentTime);
+        source.onended = () => {
+            // Schedule the stop animation with a short delay to ensure it's visible
+            setTimeout(() => {
+                stopAnimation('OB1_Image');
+            }, 150); // Adjust this delay based on the visual effect you desire
+            source.disconnect();
+        };
+        state.scheduledNotes.push(source);
+    }
+ 
+     // Create buffer source and connect it to gain node
+     function createAndConnectBufferSource(buffer) {
+         const source = audioContext.createBufferSource();
+         source.buffer = buffer;
+         source.connect(gainNode);
+         return source;
+     }
+ 
+     // Play audio buffer for looping playback
+     function playAudioBuffer() {
+         if (!state.isLooping) {
+             state.isLooping = true;
+             state.startTime = state.nextNoteTime = audioContext.currentTime;
+             scheduleNextNote();
+         }
+     }
+
+
+    function stopAudioPlayback() {
+        if (!state.isLooping) return;
+        state.isLooping = false;
+        fadeOutAndStopSources();
+    }
+
+     // Fade out and stop all scheduled sources
+     function fadeOutAndStopSources() {
+        gainNode.gain.cancelScheduledValues(audioContext.currentTime);
+        gainNode.gain.setValueAtTime(gainNode.gain.value, audioContext.currentTime);
+        gainNode.gain.linearRampToValueAtTime(0, audioContext.currentTime + 0.1);
+        setTimeout(() => {
+            state.scheduledNotes.forEach(source => source.stop());
+            state.scheduledNotes = [];
+            gainNode.gain.setValueAtTime(1, audioContext.currentTime); // Reset gain
+        }, 100);
+    }
+ 
+     // Calculate beat duration
+     function calculateBeatDuration(bpm) {
+         return 60 / bpm;
+     }
+ 
+     // Update BPM and restart playback if looping
+     function updateBPM(newBPM) {
+         console.log(`[updateBPM] Called with newBPM: ${newBPM}`);
+         state.bpm = newBPM;
+         if (state.isLooping) {
+             stopAudioPlayback();
+             playAudioBuffer(); // Assumes immediate playback restart with the new BPM
+         }
+         displayUpdate('BPM', `${newBPM} BPM`);
+     }
+
+     // uiInteractions.js
+
+// Debugging utility to log contextual information
+function debugLog(message, data = '') {
+    console.log(`[Debug] ${message}`, data);
+}
+
+// Check if running inside an iframe
+function isInIframe() {
+    const insideIframe = window.location !== window.parent.location;
+    debugLog('Is in iframe:', insideIframe);
+    return insideIframe;
+}
+
+// Highlight the currently selected iframe
+function highlightSelectedIframe() {
+    if (isInIframe()) {
+        document.body.style.boxShadow = '0 0 10px 5px yellow';
+        debugLog('Iframe highlighted');
+    }
+}
+
+// Play sample once, with debug logging
+function playSampleOnce() {
+    debugLog('Playing sample once');
+    // Assuming playSampleOnce is defined elsewhere
+}
+
+// Fetch and decode audio data
+async function fetchAndDecodeAudio(elementId) {
+    debugLog(`Fetching and decoding audio for element: ${elementId}`);
+    const audioElement = document.getElementById(elementId);
+    if (!audioElement) {
+        console.error("Audio element not found:", elementId);
+        return;
+    }
+
+    const audioSrc = audioElement.querySelector('source')?.src || audioElement.src;
+    if (!audioSrc) {
+        console.error("Audio source not found for element:", elementId);
+        return;
+    }
+
+    try {
+        const arrayBuffer = await (await fetch(audioSrc)).arrayBuffer();
+        audioContext.decodeAudioData(arrayBuffer, buffer => {
+            state.audioBuffer = buffer;
+            debugLog("Audio data fetched and decoded successfully.", buffer);
+        }, error => console.error("Error decoding audio data:", error));
+    } catch (error) {
+        console.error("Error fetching audio data:", error);
+    }
+}
+
+// Initialize event listeners after DOM content is loaded
+document.addEventListener('DOMContentLoaded', () => {
+    debugLog('DOM fully loaded and parsed');
+    fetchAndDecodeAudio("audionalData");
+});
+
+// Click event listener for the OB1_Image
+document.getElementById("OB1_Image").addEventListener("click", async () => {
+    debugLog('OB1_Image clicked');
+    if (audioContext.state === 'suspended') {
+        await audioContext.resume();
+        debugLog('Audio context resumed');
+    }
+    const loopingState = state.isLooping ? "STOP" : "START";
+    console.log(`[Click Event] Looping state: ${loopingState}`);
+    state.isLooping ? stopAudioPlayback() : playAudioBuffer();
+});
+
+// Global keydown event listener
+document.addEventListener('keydown', event => {
+    debugLog('Keydown event detected', `Key: ${event.key}, KeyCode: ${event.keyCode}`);
+
+    // Space key functionality
+    if ((event.key === ' ' || event.keyCode === 32) && (!isInIframe() || document.body.classList.contains('selected-iframe'))) {
+        playSampleOnce();
+    }
+
+    // BPM adjustment functionality
+    if (!isInIframe() && (event.key === 'b' || event.keyCode === 66)) {
+        const bpmChangeEvent = new CustomEvent('bpmChange', { detail: { adjustment: 5 } });
+        document.dispatchEvent(bpmChangeEvent);
+        debugLog('BPM change event dispatched');
+    }
+
+    highlightSelectedIframe();
+});
+
+// BPM and multiplier change event listeners
+document.addEventListener('bpmChange', event => {
+    debugLog('BPM change detected', event.detail.adjustment);
+    updateBPM(state.bpm + event.detail.adjustment);
+});
+
+document.addEventListener('multiplierChange', event => {
+    debugLog('Multiplier change detected', event.detail.multiplier);
+    if (event.detail.multiplier !== 1) {
+        state.scheduleMultiplier = Math.max(1 / 32, Math.min(32, state.scheduleMultiplier * event.detail.multiplier));
+    } else {
+        state.scheduleMultiplier = 1;
+    }
+    displayUpdate('BPM', `Multiplier: ${state.scheduleMultiplier.toFixed(2)}`);
+});
+
+// Display update function with CSS transition and debug logging
+function displayUpdate(elementId, text, duration = 3000) {
+    debugLog(`Updating display for ${elementId} with text: ${text}`);
+    const element = document.getElementById(elementId);
+    element.textContent = text.startsWith("Multiplier:") ? calculateDisplayTextForMultiplier(text.split(": ")[1]) : text;
+    element.classList.add('show');
+    setTimeout(() => element.classList.remove('show'), duration);
+}
+
+// Simplify multiplier display calculation with debug logging
+function calculateDisplayTextForMultiplier(rawMultiplierText) {
+    const multiplier = parseFloat(rawMultiplierText);
+    const displayText = multiplier !== 1 ? (multiplier > 1 ? `x${multiplier}` : `1/${1 / multiplier}`) : '1:1';
+    debugLog(`Calculated display text for multiplier: ${rawMultiplierText} is ${displayText}`);
+    return displayText;
+}
+
+// animate.js
+let animationTimeoutId = null;
+
+
+// Function to start animation
+function startAnimation(elementId) {
+    const element = document.getElementById(elementId);
+    if (!element) return;
+
+    // element.classList.add('shake-animation');
+    //
+    element.classList.add('shake-all-directions-animation');
+    //
+    // element.classList.add('bounce-zoom-in-animation');
+    //
+    // element.classList.add('zoom-out-animation');
+    //
+    // element.classList.add('pulse-animation');
+    //
+    // element.classList.add('spin-animation');
+
+
+    // Clear any existing timeout to prevent stopping the animation prematurely
+    if (animationTimeoutId) {
+        clearTimeout(animationTimeoutId);
+        animationTimeoutId = null;
+    }
+
+    // Set a timeout to remove the animation class if there are no further calls
+    animationTimeoutId = setTimeout(() => {
+        // element.classList.remove('shake-animation');
+        //
+        element.classList.remove('shake-all-directions-animation');
+        //
+        // element.classList.remove('bounce-zoom-in-animation');
+        //
+        // element.classList.remove('zoom-out-animation');
+        //
+        // element.classList.remove('pulse-animation');
+        //
+        // element.classList.remove('spin-animation');
+
+
+        animationTimeoutId = null;
+    }, 150); // Adjust timeout duration as needed based on testing
+}
+
+// Function to stop animation
+function stopAnimation(elementId) {
+    const element = document.getElementById(elementId);
+    if (!element) return;
+    // Remove shake animation class
+    // element.classList.remove('shake-animation');
+    //
+    element.classList.remove('shake-all-directions-animation');
+    //
+    // element.classList.remove('bounce-zoom-in-animation');
+    //
+    // Optionally, reset any style properties modified by the animation
+    //
+    // element.classList.remove('zoom-out-animation');
+    //
+    // element.classList.remove('pulse-animation');
+    //
+    // element.classList.remove('spin-animation');
+
+}
+
+
+// element.classList.add('shake-all-directions-animation');
+// element.classList.remove('shake-all-directions-animation');
+
+
+// element.classList.add('bounce-zoom-in-animation');
+// element.classList.remove('bounce-zoom-in-animation');
+
+
+// element.classList.add('zoom-out-animation');
+// element.classList.remove('zoom-out-animation');
+
+// element.classList.add('pulse-animation');
+// element.classList.remove('pulse-animation');
+
+
+// element.classList.add('spin-animation');
+// element.classList.remove('spin-animation');
+
+
+// @keyframes shake {
+//     0%, 100% { transform: translateX(0); }
+//     10%, 30%, 50%, 70%, 90% { transform: translateX(-5px); }
+//     20%, 40%, 60%, 80% { transform: translateX(5px); }
+// }
+
+// .shake-animation {
+//     animation: shake 0.15s cubic-bezier(.36,.07,.19,.97) both infinite;
+//     transform: translate3d(0, 0, 0);
+//     backface-visibility: hidden;
+//     perspective: 1000px;
+// }
+
+
+// /* Bounce - Zoom In */
+    
+// @keyframes bounce-zoom-in {
+//     0%, 100% { transform: scale(1); }
+//     50% { transform: scale(1.05); }
+// }
+
+// .bounce-zoom-in-animation {
+//     animation: bounce-zoom-in 0.15s cubic-bezier(.36,.07,.19,.97) both infinite;
+// }
+
+
+// /* Zoom Out */
+
+// @keyframes zoom-out {
+//     0%, 100% { transform: scale(1); }
+//     50% { transform: scale(0.95); }
+// }
+
+// .zoom-out-animation {
+//     animation: zoom-out 0.15s cubic-bezier(.36,.07,.19,.97) both infinite;
+// }
+
+
+
+// /* Pulse */
+
+// @keyframes pulse {
+//     0%, 100% { transform: scale(1); }
+//     50% { transform: scale(1.1); }
+// }
+
+// .pulse-animation {
+//     animation: pulse 0.6s cubic-bezier(.36,.07,.19,.97) both infinite;
+// }
+
+
+
+// /* Spin */
+
+// @keyframes spin {
+//     0% { transform: rotate(0deg); }
+//     100% { transform: rotate(360deg); }
+// }
+
+// .spin-animation {
+//     animation: spin 0.15s linear both infinite;
+// }
+
+// OB1_ActiveTab_Hotkeys_2.js
+
+// Global scope variables
+let isMuted = false;
+let previousVolume = 1; // Default volume level before any muting
+let multiplierCount = 0; // Move the multiplier count to the global scope
+
+// Event listener for keydown event
+document.addEventListener('keydown', handleKeyDownEvent);
+
+// Function to handle keydown event
+function handleKeyDownEvent(event) {
+    const currentTime = audioContext.currentTime;
+    const fadeDuration = 0.03; // Fast fade duration in seconds
+
+    // Adjust scheduling multiplier, BPM Adjustment, and reset scheduling multiplier with '0'
+    adjustControls(event);
+
+    // Gain adjustment with smooth fade and Toggle mute/unmute
+    adjustVolumeAndToggleMute(event, currentTime, fadeDuration);
+}
+
+// Function to adjust scheduling multiplier, BPM, and reset multiplier
+function adjustControls(event) {
+    const multiplierEvent = new CustomEvent('multiplierChange', { detail: { multiplier: 1 } });
+    const bpmEvent = new CustomEvent('bpmChange', { detail: { adjustment: 0 } });
+
+    if (event.key === '+' && event.shiftKey && !event.ctrlKey) {
+        bpmEvent.detail.adjustment = 1;
+    } else if (event.key === '_' && event.shiftKey && !event.ctrlKey) {
+        bpmEvent.detail.adjustment = -1;
+    } else if (event.key === '=' && event.shiftKey && event.ctrlKey) {
+        bpmEvent.detail.adjustment = 10;
+    } else if (event.key === '_' && event.shiftKey && event.ctrlKey) {
+        bpmEvent.detail.adjustment = -10;
+    } else if ((event.key === '=' || event.key === '-') && !event.shiftKey && !event.ctrlKey) {
+        multiplierCount++;
+        multiplierEvent.detail.multiplier = (event.key === '=') ? 2 : 0.5;
+        console.log(`Dispatching multiplierChange event, multiplier: ${multiplierEvent.detail.multiplier}`);
+    } else if (event.key === '0' && !event.shiftKey && !event.ctrlKey) {
+        // Always dispatch the event when '0' is pressed to reset the multiplier
+        multiplierEvent.detail.multiplier = 1; // Reset action
+        console.log(`Resetting multiplier to initial value: 1`);
+        document.dispatchEvent(multiplierEvent); // Dispatch without condition
+    }
+
+    if (multiplierEvent.detail.multiplier !== 1) {
+        document.dispatchEvent(multiplierEvent);
+    }
+
+    if (bpmEvent.detail.adjustment !== 0) {
+        console.log(`Dispatching bpmChange event, adjustment: ${bpmEvent.detail.adjustment}`);
+        document.dispatchEvent(bpmEvent);
+    }
+}
+
+// Function to adjust volume with smooth fade and Toggle mute/unmute
+function adjustVolumeAndToggleMute(event, currentTime, fadeDuration) {
+    if ((event.key === ',' || event.key === '.') && !event.shiftKey && !event.ctrlKey) {
+        const direction = (event.key === ',') ? -0.1 : 0.1;
+        const newGainValue = Math.min(2, Math.max(0, gainNode.gain.value + direction));
+        previousVolume = newGainValue;
+        applyVolumeFade(newGainValue, currentTime, fadeDuration);
+    } else if (event.key === 'm' && !event.shiftKey && !event.ctrlKey) {
+        if (isMuted) {
+            applyVolumeFade(previousVolume, currentTime, fadeDuration);
+            isMuted = false;
+            console.log("Unmuted");
+        } else {
+            previousVolume = gainNode.gain.value;
+            applyVolumeFade(0, currentTime, fadeDuration);
+            isMuted = true;
+            console.log("Muted");
+        }
+    }
+}
+
+// Function to apply volume fade
+function applyVolumeFade(targetGainValue, currentTime, fadeDuration) {
+    gainNode.gain.setValueAtTime(gainNode.gain.value, currentTime);
+    gainNode.gain.linearRampToValueAtTime(targetGainValue, currentTime + fadeDuration);
+    console.log(`Volume adjusted, target gain: ${targetGainValue}`);
+}
+
+
+ 
+</script>
+ 
+</body>
+</html>
+
