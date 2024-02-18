@@ -45,6 +45,31 @@ Your browser does not support the audio element.
    
 </style>
 <script>
+
+window.addEventListener('message', (event) => {
+    // if (event.origin !== "EXPECTED_ORIGIN") return; // Replace EXPECTED_ORIGIN with your domain
+
+    const { type, data } = event.data;
+
+    switch (type) {
+        case 'updateBPM':
+            // Ensure BPM is within the allowed range
+            const newBPM = Math.max(60, Math.min(240, data.bpm));
+            updateBPM(newBPM);
+            break;
+        case 'muteControl':
+            // Apply mute or unmute based on the message
+            if (data.mute) {
+                applyVolumeFade(0, audioContext.currentTime, 0.03); // Mute
+            } else {
+                applyVolumeFade(previousVolume, audioContext.currentTime, 0.03); // Unmute
+            }
+            break;
+        default:
+            console.log('Unknown message type:', type);
+    }
+});
+
     // Create audio context and gain node
     const audioContext = new (window.AudioContext || window.webkitAudioContext)();
     const gainNode = audioContext.createGain();
@@ -222,14 +247,31 @@ Your browser does not support the audio element.
  
      // Update BPM and restart playback if looping
      function updateBPM(newBPM) {
-         console.log(`[updateBPM] Called with newBPM: ${newBPM}`);
-         state.bpm = newBPM;
-         if (state.isLooping) {
-             stopAudioPlayback();
-             playAudioBuffer(); // Assumes immediate playback restart with the new BPM
-         }
-         displayUpdate('BPM', `${newBPM} BPM`);
-     }
+        console.log(`Updating BPM to ${newBPM}`);
+        state.bpm = newBPM;
+
+        // Assume we have a function to adjust playback scheduling based on BPM
+        adjustPlaybackTimingBasedOnBPM();
+
+        // If necessary, update UI or other elements to reflect the new BPM
+        displayUpdate('BPM', `${newBPM} BPM`);
+    }
+
+    function adjustPlaybackTimingBasedOnBPM() {
+        // Example: Adjusting the next note time based on the new BPM
+        // This is a simplified example. Your actual implementation may vary.
+        const beatDuration = 60 / state.bpm;
+        state.nextNoteTime = audioContext.currentTime + beatDuration;
+
+        // If there's ongoing playback that needs to be rescheduled, handle it here
+        if (state.isLooping) {
+            // Stop current playback loop
+            stopAudioPlayback();
+
+            // Restart playback with the new BPM
+            playAudioBuffer();
+        }
+    }
  
      // Display update with CSS transition
      function displayUpdate(elementId, text, duration = 3000) {
