@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Iframe Grid Loader</title>
+<style>
+  body {
+    background-color: black;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    height: 100vh;
+    margin: 0;
+  }
+  .grid-container {
+    display: grid;
+    grid-template-columns: repeat(6, 1fr);
+    gap: 10px;
+    width: calc(100vh - 20px);
+    height: calc(100vh - 20px);
+    max-width: 100vw;
+    max-height: 100vh;
+  }
+  .iframe-wrapper {
+    position: relative;
+    width: 100%;
+    padding-top: 16.66%;
+  }
+  iframe {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    border: 2px solid rgb(69, 69, 69);
+    cursor: pointer;
+  }
+</style>
+</head>
+<body>
+
+<div class="grid-container">
+  <!-- Iframes will be inserted here by JavaScript -->
+</div>
+
+<script>
+const numberOfIframes = 36; // 6x6 grid
+
+function createIframes() {
+  console.log('Creating iframes...');
+  const container = document.querySelector('.grid-container');
+  for (let i = 0; i < numberOfIframes; i++) {
+    const wrapper = document.createElement('div');
+    wrapper.className = 'iframe-wrapper';
+
+    const iframe = document.createElement('iframe');
+    iframe.id = `iframe-${i}`;
+    iframe.addEventListener('load', function() {
+      console.log(`Iframe #${i} loaded content.`);
+    });
+
+    iframe.addEventListener('click', function() {
+      console.log(`Iframe #${i} clicked, opening file input.`);
+      loadFileIntoIframe(iframe.id);
+    });
+
+    wrapper.appendChild(iframe);
+    container.appendChild(wrapper);
+  }
+}
+
+function loadFileIntoIframe(iframeId) {
+  console.log(`loadFileIntoIframe called for ${iframeId}`);
+  let fileInput = document.getElementById('file-input');
+  if (!fileInput) {
+    fileInput = document.createElement('input');
+    fileInput.type = 'file';
+    fileInput.accept = 'text/html';
+    fileInput.id = 'file-input';
+    fileInput.style.visibility = 'hidden'; // instead of display: none
+    document.body.appendChild(fileInput);
+  }
+
+  fileInput.onchange = function(e) {
+    console.log(`File selected for ${iframeId}`);
+    const file = e.target.files[0];
+    if (file) {
+      console.log(`File ${file.name} is being read for ${iframeId}`);
+      const reader = new FileReader();
+      reader.onload = function(e) {
+        console.log(`File ${file.name} read, loading into ${iframeId}`);
+        const blob = new Blob([e.target.result], { type: 'text/html' });
+        const url = URL.createObjectURL(blob);
+        const iframe = document.getElementById(iframeId);
+        iframe.src = url;
+      };
+      reader.onerror = function(e) {
+        console.error(`FileReader error for ${iframeId}:`, reader.error);
+      };
+      reader.readAsText(file);
+    }
+    // Reset the value so the same file can be loaded again if necessary
+    fileInput.value = '';
+  };
+
+  // Use a timeout to delay the click, which can help with browser restrictions
+  setTimeout(() => {
+    try {
+      fileInput.click();
+    } catch (error) {
+      console.error(`Error when triggering click for ${iframeId}:`, error);
+    }
+  }, 0);
+}
+
+
+createIframes();
+</script>
+
+</body>
+</html>
