@@ -47,7 +47,21 @@ Your browser does not support the audio element.
     #iframeContainer iframe {
         display: flex; /* This will allow the iframes to be in a flex container */
         flex-wrap: wrap; /* Iframes will wrap to the next line if there's no space */
+        height: 50px;
+        width: 50px;
         margin: 20px;
+    }
+
+    body, html {
+    margin: 0;
+    padding: 0;
+    width: 100%;
+    height: 100%;
+    overflow: hidden; 
+    }
+    #OB1_Image {
+    width: 100%;
+    height: 100%;
     }
    
 </style>
@@ -169,7 +183,6 @@ Your browser does not support the audio element.
  
 </script>
  
-<script src="spdPad.js"></script>
 <script src="uiInteractions.js"></script>
 <script src="animate.js"></script>
 <script src="OB2_ActiveTab_Hotkeys_2.js"></script>

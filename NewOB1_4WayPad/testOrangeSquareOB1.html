@@ -1,0 +1,115 @@
+<CommonHtml>
+<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>OB1 TEST - Audional Art</title><style>body{background-color:#000000;display:flex;justify-content:center;align-items:center;height:100vh;margin:0}img {width: auto;height: auto;max-width: 60%;max-height: 80vh;object-fit: contain;aspect-ratio: 1 / 1;}
+</style></head>
+</CommonHtml>
+
+<div id="ob1Number" style="display: none;">TEST</div> <!--PLACE COLLECTION NUMBER HERE-->
+<div id="sampleName" style="display: none;">Audional 2.0 Test</div><!--PLACE SAMPLE NAME HERE-->
+<div id= "BPM">78 BPM</div> 
+
+<OB1_Base64_Image_Text>
+<body>
+<img id="OB1_Image" src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABkAAAAZCAIAAABLixI0AAAACXBIWXMAAAAnAAAAJwEqCZFPAAAAI0lEQVQ4jWN81s3JQCXARC2DRs0aNWvUrFGzRs0aNWsYmQUAtP4BrHiSyo4AAAAASUVORK5CYII=" alt="Click to play audio">
+</OB1_Base64_Image_Text>
+
+<Audional_Base64_Sample_Text>
+<audio id="audionalData" loop data-audionalSampleName="808 Kick Drum">
+<source src="data:audio/wav;base64,UklGRhowAABXQVZFZm10IBAAAAABAAEARKwAABCxAgAEABAAZGF0YUwAAAACAAACABgAZGF0YQAAAAEAkZAgIIEyHjAqeykAAAAA//uQZAUABfQU8WkMAAAAAHHVUUU5VZmUId2luZwAAAAAA//uQZAUABfQU8WkMAAAAAHHVUUU5VZmUId2luZwAAAAAA//uQZAMABfQU8WkMAAAAAHHVUUU5VZmUId2luZwAAAAAA" type="audio/wav">
+Your browser does not support the audio element.
+</audio>
+</Audional_Base64_Sample_Text>
+
+
+<style>
+    #BPM {font-size: 24px;font-weight: bold;color: rgb(255, 251, 0);position: absolute;top: 5%;left: 50%;transform: translate(-50%, -50%);opacity: 0;transition: opacity 0.5s ease-in-out;}#BPM.show {opacity: 1;}#OB1_Image {position: fixed;top: 50%;left: 50%;transform: translate(-50%, -50%);}@keyframes shake-all-directions {0%, 100% {transform: translate(-50%, -50%) translate(0);}10% {transform: translate(-50%, -50%) translate(-5px, -5px);}20% {transform: translate(-50%, -50%) translate(5px, -5px);}30% {transform: translate(-50%, -50%) translate(-5px, 5px);}40% {transform: translate(-50%, -50%) translate(5px, 5px);}50% {transform: translate(-50%, -50%) translate(-5px, -5px);}60% {transform: translate(-50%, -50%) translate(5px, 5px);}70% {transform: translate(-50%, -50%) translate(-5px, 5px);}80% {transform: translate(-50%, -50%) translate(5px, -5px);}90% {transform: translate(-50%, -50%) translate(-5px, -5px);}}.shake-all-directions-animation {animation: shake-all-directions 0.15s cubic-bezier(.36,.07,.19,.97) both infinite;}
+    </style>
+    
+    <initialisations>
+    <script>
+    const audioContext=new(window.AudioContext||window.webkitAudioContext),gainNode=audioContext.createGain();let isMuted=!1,previousVolume=1,multiplierCount=0,isFadingOut=!1,playbackSpeed=1;gainNode.connect(audioContext.destination),gainNode.gain.value=1;const state={bpm:78,isLooping:!1,audioBuffer:null,nextNoteTime:audioContext.currentTime,scheduledNotes:[],scheduleMultiplier:1};
+    </script>
+    </initialisations>
+    
+    <animationScript>
+    <script>
+    let animationTimeoutId=null,animationMultiplier=1;function startAnimation(i){const t=document.getElementById(i);t&&(t.classList.add("shake-all-directions-animation"),animationTimeoutId&&(clearTimeout(animationTimeoutId),animationTimeoutId=null),animationTimeoutId=setTimeout((()=>{t.classList.remove("shake-all-directions-animation"),animationTimeoutId=null}),150))}function stopAnimation(i){const t=document.getElementById(i);t&&t.classList.remove("shake-all-directions-animation")}
+    </script> 
+    </animationScript>
+    
+    <parentChildMessages>
+    <script>
+    function sendCurrentSettingsToParent(){const e={scheduleMultiplier:state.scheduleMultiplier,currentVolume:gainNode.gain.value};console.log("Sending current settings to parent window",{data:e}),window.parent.postMessage({type:"currentSettingsResponse",data:e},"*")}function sendMessageToParent(e,t){const a={action:e,ob1Number:document.getElementById("ob1Number").innerText,sampleName:t,timestamp:(new Date).toISOString()};window.parent.postMessage(a,"*"),console.log("sending action message to parent window",{message:a})}function simulateKeyPress(e,t,a){console.log(`Simulating keypress: key=${e}, shiftKey=${t}, ctrlKey=${a}`);const n=new KeyboardEvent("keydown",{key:e,shiftKey:t,ctrlKey:a,bubbles:!0});document.dispatchEvent(n)}window.addEventListener("message",(e=>{const{type:t,data:a}=e.data;switch(t){case"updateBPM":const e=Math.max(60,Math.min(240,a.bpm));updateBPM(e);break;case"muteControl":a.mute?applyVolumeFade(0,audioContext.currentTime,.03):applyVolumeFade(previousVolume,audioContext.currentTime,.03);break;case"increaseVolume":increaseVolume();break;case"decreaseVolume":decreaseVolume();break;case"playLoop":playLoop();break;case"playOnce":playOnce();break;case"playAtSpeed":playAtSpeed(a.speed);break;case"increaseScheduleMultiplier":simulateKeyPress("=",!1,!1);break;case"decreaseScheduleMultiplier":simulateKeyPress("-",!1,!1);break;case"requestCurrentSettings":sendCurrentSettingsToParent();break;default:console.log("Unknown message type:",t)}}));
+    </script>
+    </parentChildMessages>
+    
+    <eventListeners>
+    <script>
+    document.addEventListener("DOMContentLoaded",(()=>fetchAndDecodeAudio("audionalData"))),document.getElementById("OB1_Image").addEventListener("click",(async()=>{"suspended"===audioContext.state&&await audioContext.resume();const e=state.isLooping?"STOP":"START";console.log(`[Click Event] Looping state: ${e}`),state.isLooping?stopAudioPlayback():playAudioBuffer()})),document.addEventListener("keydown",(e=>{" "!==e.key&&32!==e.keyCode||playSampleOnce()})),document.addEventListener("bpmChange",(e=>updateBPM(state.bpm+e.detail.adjustment)));
+    </script>
+    </eventListeners>
+        
+    <parentMessageHelperFiles>
+    <script>
+    function playLoop(){state.isLooping||playAudioBuffer()}function playOnce(){playSampleOnce()}function increaseVolume(){adjustVolumeAndToggleMute({key:"."},audioContext.currentTime,.03)}function decreaseVolume(){adjustVolumeAndToggleMute({key:","},audioContext.currentTime,.03)}
+    </script>
+    </parentMessageHelperFiles>
+    
+    <playback>
+    <script>
+    function playSampleOnce(){const e=createAndConnectBufferSource(state.audioBuffer),t=document.getElementById("sampleName").innerText;startAnimation("OB1_Image"),e.start(),sendMessageToParent("playSampleOnce",t),e.onended=()=>{}}function playNote(){const e=createAndConnectBufferSource(state.audioBuffer);startAnimation("OB1_Image"),e.start(audioContext.currentTime),e.onended=()=>{e.disconnect()},state.scheduledNotes.push(e)}function stopAudioPlayback(){state.isLooping&&(state.isLooping=!1,fadeOutAndStopSources())}function playAudioBuffer(){if(!state.isLooping){const e=document.getElementById("sampleName").innerText;state.isLooping=!0,state.startTime=state.nextNoteTime=audioContext.currentTime,scheduleNextNote(),sendMessageToParent("playAudioBuffer",e)}}
+    </script>
+    </playback>
+        
+    <multiplierArrayDefinitions>
+    <script>
+    const multiplierSteps=[16,8,4,2,1,.5,.25,.125,.0625,.03125,.015625,.0078125,.00390625,.001953125,.0009765625,.00048828125],loopLengthDescriptions={16:"1/16",8:"1/8",4:"1/4",2:"1/2 beat",1:"Loop Length = 1 beat",.5:"2 beats",.25:"Loop Length = 1 bar",.125:"2 bars",.0625:"4 bars",.03125:"8 bars",.015625:"16 bars",.0078125:"32 bars",.00390625:"64 bars",.001953125:"128 bars",.0009765625:"256 bars",.00048828125:"512 bars"};document.addEventListener("multiplierChange",(e=>{let t=state.scheduleMultiplier;t=1!==e.detail.multiplier?Math.max(.00048828125,Math.min(16,t*e.detail.multiplier)):1,state.scheduleMultiplier=t;let i=animationMultiplier;1!==e.detail.multiplier?i*=e.detail.multiplier:i=1,animationMultiplier=i,console.log(`Multiplier adjusted: ${t}`),displayUpdate("BPM",`Multiplier: ${t}`)}));
+    </script>
+    </multiplierArrayDefinitions>
+    
+    <keyboardShortcuts>
+    <script>
+    function handleKeyDownEvent(e){const t=audioContext.currentTime;adjustControls(e),adjustVolumeAndToggleMute(e,t,.03)}function adjustControls(e){e.shiftKey&&!e.ctrlKey?handleShiftWithoutCtrl(e):e.shiftKey&&e.ctrlKey?handleShiftWithCtrl(e):e.shiftKey||e.ctrlKey||handleNoModifiers(e)}function handleShiftWithoutCtrl(e){switch(e.key){case"+":dispatchEvent("bpmChange",{adjustment:1});break;case"_":dispatchEvent("bpmChange",{adjustment:-1});break;case"}":adjustPlaybackSpeed(.01);break;case"{":adjustPlaybackSpeed(-.01)}}function handleShiftWithCtrl(e){switch(e.key){case"=":dispatchEvent("bpmChange",{adjustment:10});break;case"_":dispatchEvent("bpmChange",{adjustment:-10});break;case"}":adjustPlaybackSpeed(.1);break;case"{":adjustPlaybackSpeed(-.1)}}function handleNoModifiers(e){switch(e.key){case"=":dispatchEventAndLogMultiplier(2);break;case"-":dispatchEventAndLogMultiplier(.5);break;case"0":dispatchEvent("multiplierChange",{multiplier:1}),console.log("Resetting multiplier to initial value: 1")}}function dispatchEventAndLogMultiplier(e){dispatchEvent("multiplierChange",{multiplier:e}),console.log(`Dispatching multiplierChange event, multiplier: ${e}`)}function adjustPlaybackSpeed(e){playbackSpeed+=e,window.playAtSpeed(playbackSpeed),console.log(`Playback speed adjusted to: ${playbackSpeed}`)}function dispatchEvent(e,t){const a=new CustomEvent(e,{detail:t});document.dispatchEvent(a)}document.addEventListener("keydown",handleKeyDownEvent);
+    </script>
+    </keyboardShortcuts>
+    
+    <variablePlaybackSpeed>
+    <script>
+    window.playAtSpeed=function(e){if(e<.2||e>100)console.error("Playback speed must be between 0.20 and 100.");else if(state.audioBuffer){const a=e;state.playbackRate=a,state.scheduledNotes.forEach((e=>{e.playbackRate&&e.playbackRate.setValueAtTime(a,audioContext.currentTime)})),console.log(`Playback speed set to: ${a}`)}};
+    </script>
+    </variablePlaybackSpeed>
+    
+    <audioProcessing>
+    <script>
+    async function fetchAndDecodeAudio(e){console.log(`[fetchAndDecodeAudio] Fetching audio for element: ${e}`);const t=document.getElementById(e);if(!t)return console.error("Audio element not found:",e);const o=t.querySelector("source")?.src||t.src;if(!o)return console.error("Audio source not found for element:",e);try{const e=await(await fetch(o)).arrayBuffer();audioContext.decodeAudioData(e,(e=>{state.audioBuffer=e,console.log("[fetchAndDecodeAudio] Audio data fetched and decoded successfully.")}),(e=>console.error("Error decoding audio data:",e)))}catch(e){console.error("Error fetching audio data:",e)}}function createAndConnectBufferSource(e){const t=audioContext.createBufferSource();return t.buffer=e,t.connect(gainNode),state.playbackRate&&t.playbackRate.setValueAtTime(state.playbackRate,audioContext.currentTime),t}function fadeOutAndStopSources(){if(isFadingOut)return;isFadingOut=!0;const e=audioContext.currentTime;gainNode.gain.setValueAtTime(gainNode.gain.value,e),gainNode.gain.linearRampToValueAtTime(0,e+.1),setTimeout((()=>{state.scheduledNotes.forEach((e=>{e.stop(),e.disconnect()})),state.scheduledNotes=[],gainNode.gain.cancelScheduledValues(audioContext.currentTime),gainNode.gain.setValueAtTime(1,audioContext.currentTime),isFadingOut=!1}),100)}
+    </script>
+    </audioProcessing>
+    
+    <volumeAndMute>
+    <script>
+    function adjustVolumeAndToggleMute(e,a,i){if(","!==e.key&&"."!==e.key||e.shiftKey||e.ctrlKey){if("m"===e.key&&!e.shiftKey&&!e.ctrlKey){isMuted=!isMuted;applyVolumeFade(isMuted?0:previousVolume,a,i),console.log(isMuted?"Muted":"Unmuted")}}else{const o=","===e.key?-.1:.1,u=Math.min(2,Math.max(0,gainNode.gain.value+o));previousVolume=u,applyVolumeFade(u,a,i)}}function applyVolumeFade(e,a,i){gainNode.gain.setValueAtTime(gainNode.gain.value,a),gainNode.gain.linearRampToValueAtTime(e,a+i),console.log(`Volume adjusted, target gain: ${e}`)}
+    </script>
+    </volumeAndMute>
+    
+    <timing>
+    <script>
+    function calculateBeatDuration(t){return 60/t}function updateBPM(t){console.log(`Updating BPM to ${t}`),state.bpm=t,adjustPlaybackTimingBasedOnBPM(),displayUpdate("BPM",`${t} BPM`)}function adjustPlaybackTimingBasedOnBPM(){const t=60/state.bpm;state.nextNoteTime=audioContext.currentTime+t,state.isLooping&&(stopAudioPlayback(),playAudioBuffer())}
+    </script>
+    </timing>
+    
+    <scheduling>
+    <script>
+    let beatCounter=0;function scheduleNextNote(){if(!state.isLooping||!state.audioBuffer)return;const e=audioContext.currentTime;e>=state.nextNoteTime&&(playNote(),console.log(`Beat ${++beatCounter}: Scheduled at ${state.nextNoteTime.toFixed(3)} seconds.`),state.nextNoteTime+=calculateBeatDuration(state.bpm)/state.scheduleMultiplier);const t=Math.max(1e3*(state.nextNoteTime-e),10);setTimeout(scheduleNextNote,t)}
+    </script>
+    </scheduling>
+    
+    <display>
+    <script>
+    function displayUpdate(t,e,o=3e3){const s=document.getElementById(t),n=s.textContent;s.textContent=e.startsWith("Multiplier:")?calculateDisplayTextForMultiplier(parseFloat(e.split(": ")[1])):e,s.classList.add("show"),setTimeout((()=>{s.textContent===e&&n!==e&&s.classList.remove("show")}),o)}function calculateDisplayTextForMultiplier(t){const e=t.toString();return loopLengthDescriptions.hasOwnProperty(e)?loopLengthDescriptions[e]:1!==t?t>1?`x${t}`:"1/"+1/t:"Loop Length = 1 beat"}
+    </script>
+    </display>
+    
+    </body>
+    </html>
+    
+    
+    
